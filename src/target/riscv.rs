@@ -561,33 +561,33 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_bltu      = exec_b(b: &args_b; 0, |_, a, b| a < b),
         trans_bgeu      = exec_b(b: &args_b; 0, |_, a, b| a >= b),
 
-	    trans_andi      = exec_i(i: &args_i; 0, |_, a, b| a & b),
-	    trans_ori       = exec_i(i: &args_i; 0, |_, a, b| a | b),
-	    trans_xori      = exec_i(i: &args_i; 0, |_, a, b| a ^ b),
+        trans_andi      = exec_i(i: &args_i; 0, |_, a, b| a & b),
+        trans_ori       = exec_i(i: &args_i; 0, |_, a, b| a | b),
+        trans_xori      = exec_i(i: &args_i; 0, |_, a, b| a ^ b),
         trans_addi      = exec_i(i: &args_i; 0, |_, a, b| a.wrapping_add(b)),
-	    trans_slti      = exec_i(i: &args_i; 0, |_, a, b| slt(a, b)),
-	    trans_sltiu     = exec_i(i: &args_i; 0, |_, a, b| sltu(a, b)),
+        trans_slti      = exec_i(i: &args_i; 0, |_, a, b| slt(a, b)),
+        trans_sltiu     = exec_i(i: &args_i; 0, |_, a, b| sltu(a, b)),
 
-	    trans_slli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b)),
-	    trans_srli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b)),
-	    trans_srai      = exec_shift(i: &args_shift; 0, |_, a, b| sra(a, b)),
+        trans_slli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_srai      = exec_shift(i: &args_shift; 0, |_, a, b| sra(a, b)),
 
-	    trans_and       = exec_r(r: &args_r; 0, |_, a, b| a & b),
-	    trans_or        = exec_r(r: &args_r; 0, |_, a, b| a | b),
-	    trans_xor       = exec_r(r: &args_r; 0, |_, a, b| a ^ b),
-	    trans_add       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_add(b)),
-	    trans_sub       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
-	    trans_slt       = exec_r(r: &args_r; 0, |_, a, b| slt(a, b)),
-	    trans_sltu      = exec_r(r: &args_r; 0, |_, a, b| sltu(a, b)),
-	    trans_sll       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shl(b)),
-	    trans_srl       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shr(b)),
-	    trans_sra       = exec_r(r: &args_r; 0, |_, a, b| sra(a, b)),
+        trans_and       = exec_r(r: &args_r; 0, |_, a, b| a & b),
+        trans_or        = exec_r(r: &args_r; 0, |_, a, b| a | b),
+        trans_xor       = exec_r(r: &args_r; 0, |_, a, b| a ^ b),
+        trans_add       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_add(b)),
+        trans_sub       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
+        trans_slt       = exec_r(r: &args_r; 0, |_, a, b| slt(a, b)),
+        trans_sltu      = exec_r(r: &args_r; 0, |_, a, b| sltu(a, b)),
+        trans_sll       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srl       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sra       = exec_r(r: &args_r; 0, |_, a, b| sra(a, b)),
 
-	    trans_lb        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u32)),
-	    trans_lh        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u32)),
-	    trans_lw        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i32_le(a)),
-	    trans_lbu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u32)),
-	    trans_lhu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u32)),
+        trans_lb        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u32)),
+        trans_lh        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u32)),
+        trans_lw        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i32_le(a)),
+        trans_lbu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u32)),
+        trans_lhu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u32)),
 
         trans_sb        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u8(a, v as u8)),
         trans_sh        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u16_le(a, v as u16)),
@@ -669,7 +669,7 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_remu      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| remu(a, b)),
     }
 
-    // Pritileged Instructions
+    // Privileged Instructions
     #[rustfmt::skip]
     trans! {
         trans_mret      = exec(; 0, |cpu, name, _| {
