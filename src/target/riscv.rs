@@ -33,20 +33,21 @@ const fn make_interrupt(code: u32) -> u32 {
 const EXCP_MACHINE_EXTERNAL_INT: u32 = make_interrupt(11);
 
 // Unprivileged Floating-Point CSRs
-const CSR_FFLAGS: u32 = 0x001;
-const CSR_FRM: u32 = 0x002;
-const CSR_FCSR: u32 = 0x003;
+//const CSR_FFLAGS: u32 = 0x001;
+//const CSR_FRM: u32 = 0x002;
+//const CSR_FCSR: u32 = 0x003;
 
 // Unprivileged Counter/Timers
 const CSR_CYCLE: u32 = 0xc00;
 const CSR_TIME: u32 = 0xc01;
 const CSR_INSTRET: u32 = 0xc02;
-// 0..32
 const CSR_HPMCOUNTER0: u32 = 0xc00;
+const CSR_HPMCOUNTER31: u32 = 0xc1f;
 const CSR_CYCLEH: u32 = 0xc80;
 const CSR_TIMEH: u32 = 0xc81;
 const CSR_INSTRETH: u32 = 0xc82;
 const CSR_HPMCOUNTER0H: u32 = 0xc80;
+const CSR_HPMCOUNTER31H: u32 = 0xc9f;
 
 // Machine Information Registers
 const CSR_MVENDOR_ID: u32 = 0xf11;
@@ -62,7 +63,7 @@ const CSR_MEDELEG: u32 = 0x302;
 const CSR_MIDELEG: u32 = 0x303;
 const CSR_MIE: u32 = 0x304;
 const CSR_MTVEC: u32 = 0x305;
-const CSR_MCOUTNEREN: u32 = 0x306;
+//const CSR_MCOUTNEREN: u32 = 0x306;
 const CSR_MSTATUSH: u32 = 0x310;
 
 // Machine Trap Handling
@@ -72,52 +73,53 @@ const CSR_MCAUSE: u32 = 0x342;
 const CSR_MTVAL: u32 = 0x343;
 const CSR_MIP: u32 = 0x344;
 const CSR_MINST: u32 = 0x34a;
-const CSR_MTVAL2: u32 = 0x34b;
+//const CSR_MTVAL2: u32 = 0x34b;
 
 // Machine Configuration
-const CSR_MENV_CFG: u32 = 0x30a;
-const CSR_MENV_CFGH: u32 = 0x31a;
-const CSR_MSEC_CFG: u32 = 0x747;
-const CSR_MSEC_CFGH: u32 = 0x757;
+//const CSR_MENV_CFG: u32 = 0x30a;
+//const CSR_MENV_CFGH: u32 = 0x31a;
+//const CSR_MSEC_CFG: u32 = 0x747;
+//const CSR_MSEC_CFGH: u32 = 0x757;
 
 // Machine Memory Protection
-// 0..16
-const CSR_PMP_CFG_0: u32 = 0x3a0;
-// 0..64
-const CSR_PMP_ADDR_0: u32 = 0x3b0;
+//const CSR_PMP_CFG_0: u32 = 0x3a0;
+//const CSR_PMP_CFG_15: u32 = 0x3af;
+//const CSR_PMP_ADDR_0: u32 = 0x3b0;
+//const CSR_PMP_ADDR_63: u32 = 0x3ef;
 
 // Machine Non-Maskable Interrupt Handling
-const CSR_MNSCRATCH: u32 = 0x740;
-const CSR_MNEPC: u32 = 0x741;
-const CSR_MNCAUSE: u32 = 0x742;
-const CSR_MNSTATUS: u32 = 0x744;
+//const CSR_MNSCRATCH: u32 = 0x740;
+//const CSR_MNEPC: u32 = 0x741;
+//const CSR_MNCAUSE: u32 = 0x742;
+//const CSR_MNSTATUS: u32 = 0x744;
 
 // Machine Counter/Timers
 const CSR_MCYCLE: u32 = 0xb00;
 const CSR_MCYCLEH: u32 = 0xb80;
 const CSR_MINSTRET: u32 = 0xb02;
 const CSR_MINSTRETH: u32 = 0xb82;
-// 0..32
 const CSR_MHPMCOUNTER0: u32 = 0xb00;
+const CSR_MHPMCOUNTER31: u32 = 0xb1f;
 const CSR_MHPMCOUNTER0H: u32 = 0xb80;
+const CSR_MHPMCOUNTER31H: u32 = 0xb9f;
 
 // Machine Counter Setup
 const CSR_MCOUNTINHIBIT: u32 = 0x320;
-// 0..32
 const CSR_MHPM_EVENT0: u32 = 0x320;
+const CSR_MHPM_EVENT31: u32 = 0x33f;
 
 // Debug/Trace Registers (shared with Debug Mode)
-const CSR_TSELECT: u32 = 0x7a0;
-const CSR_TDATA1: u32 = 0x7a1;
-const CSR_TDATA2: u32 = 0x7a2;
-const CSR_TDATA3: u32 = 0x7a3;
-const CSR_MCONTEXT: u32 = 0x7a8;
+//const CSR_TSELECT: u32 = 0x7a0;
+//const CSR_TDATA1: u32 = 0x7a1;
+//const CSR_TDATA2: u32 = 0x7a2;
+//const CSR_TDATA3: u32 = 0x7a3;
+//const CSR_MCONTEXT: u32 = 0x7a8;
 
 // Debug Mode Registers
-const CSR_DCSR: u32 = 0x7b0;
-const CSR_DPC: u32 = 0x7b1;
-const CSR_SCRATCH0: u32 = 0x7b2;
-const CSR_SCRATCH1: u32 = 0x7b3;
+//const CSR_DCSR: u32 = 0x7b0;
+//const CSR_DPC: u32 = 0x7b1;
+//const CSR_SCRATCH0: u32 = 0x7b2;
+//const CSR_SCRATCH1: u32 = 0x7b3;
 
 const fn misa_ext(c: u8) -> u32 {
     match c {
@@ -130,7 +132,7 @@ const fn misa_ext(c: u8) -> u32 {
 const MISA_EXT_M: u32 = misa_ext(b'm');
 const MISA_EXT_I: u32 = misa_ext(b'i');
 const MISA_EXT_X: u32 = misa_ext(b'x');
-const MISA_EXT_ALL: u32 = MISA_EXT_M | MISA_EXT_I;
+const MISA_EXT_ALL: u32 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
 const MISA_EXT_MASK: u32 = MISA_EXT_ALL ^ MISA_EXT_I;
 
 const MSTATUS_MIE: u64 = 1 << 3;
@@ -139,12 +141,12 @@ const MSTATUS_MASK: u64 = MSTATUS_MIE;
 const MIE_MASK: u32 = 0xffff0800;
 const MTVEC_MASK: u32 = 0xfffffffd;
 
-const MIE_SS: u32 = 1 << 1;
-const MIE_MS: u32 = 1 << 3;
-const MIE_ST: u32 = 1 << 5;
-const MIE_MT: u32 = 1 << 7;
-const MIE_SE: u32 = 1 << 9;
-const MIE_ME: u32 = 1 << 11;
+//const MIE_SS: u32 = 1 << 1;
+//const MIE_MS: u32 = 1 << 3;
+//const MIE_ST: u32 = 1 << 5;
+//const MIE_MT: u32 = 1 << 7;
+//const MIE_SE: u32 = 1 << 9;
+//const MIE_ME: u32 = 1 << 11;
 
 const SLEEP_TIME: Duration = Duration::from_micros(2000);
 const PAUSE_TIME: Duration = Duration::from_secs(1);
@@ -167,6 +169,8 @@ pub struct Cpu<M> {
     mscratch: u32,
     mtval: u32,
     minst: u32,
+
+    minstret: u64,
 }
 
 impl<M> Cpu<M> {
@@ -191,6 +195,8 @@ impl<M> Cpu<M> {
             mscratch: 0,
             mtval: 0,
             minst: 0,
+
+            minstret: 0,
         }
     }
 
@@ -213,6 +219,11 @@ impl<M> Cpu<M> {
 
     fn enable_interrupts(&mut self) {
         self.mstatus |= MSTATUS_MIE;
+    }
+
+    fn mtime(&self) -> u64 {
+        // TODO: mtime
+        0
     }
 
     pub fn write_gr(&mut self, i: usize, value: u32) {
@@ -248,19 +259,20 @@ impl<M: Memory> Cpu<M> {
 
                     if self.pc & 3 != 0 {
                         // TODO: lower priority than illegal insn exception
-                        self.excp(EXCP_INSN_ADDR_MISALIGNED);
+                        self.excp(EXCP_INSN_ADDR_MISALIGNED, 0);
                     } else if !RiscvDecode32::decode(self, insn) {
                         trace!("{:x}: illegal instruction {insn:x}", self.pc);
                         self.minst = insn;
-                        self.excp(EXCP_ILLEGAL_INSN);
+                        self.excp(EXCP_ILLEGAL_INSN, 0);
                     }
                 }
                 Err(MemoryError::AccessFault) => {
-                    self.excp(EXCP_INSN_ACCESS_FAULT);
+                    self.excp(EXCP_INSN_ACCESS_FAULT, 0);
                 }
             }
 
             self.pc = self.npc;
+            self.minstret += 1;
         }
     }
 
@@ -277,7 +289,7 @@ impl<M: Memory> Cpu<M> {
         let code = (self.mip & 0xffff0800).trailing_zeros();
         trace!("interrupt({code})");
         self.mip &= !(1 << code);
-        self.excp(make_interrupt(code));
+        self.excp(make_interrupt(code), 0);
     }
 
     fn exec<T, O>(&mut self, name: &str, args: T, ext: u32, op: O) -> bool
@@ -393,8 +405,7 @@ impl<M: Memory> Cpu<M> {
                     cpu.write_gr(i.rd as usize, value);
                 }
                 Err(MemoryError::AccessFault) => {
-                    cpu.mtval = addr;
-                    cpu.excp(EXCP_LOAD_ACCESS_FAULT);
+                    cpu.excp(EXCP_LOAD_ACCESS_FAULT, addr);
                 }
             }
             true
@@ -419,8 +430,7 @@ impl<M: Memory> Cpu<M> {
             if let Err(err) = op(cpu, addr as usize, s2) {
                 match err {
                     MemoryError::AccessFault => {
-                        cpu.mtval = addr;
-                        cpu.excp(EXCP_STORE_AMO_ACCESS_FAULT);
+                        cpu.excp(EXCP_STORE_AMO_ACCESS_FAULT, addr);
                     }
                 }
             }
@@ -434,6 +444,8 @@ impl<M: Memory> Cpu<M> {
             CSR_MARCH_ID => 0,
             CSR_MIMP_ID => 0,
             CSR_MHART_ID => 0,
+            CSR_MCONFIG_PTR => 0,
+
             CSR_MSTATUS => self.mstatus as u32,
             CSR_MSTATUSH => zextract(self.mstatus, 32, 32) as u32,
             CSR_MISA => self.misa,
@@ -447,23 +459,58 @@ impl<M: Memory> Cpu<M> {
             CSR_MINST => self.minst,
             CSR_MEDELEG => 0,
             CSR_MIDELEG => 0,
+
+            CSR_MCYCLE => 0,
+            CSR_MCYCLEH => 0,
+            CSR_MINSTRET => self.minstret as u32,
+            CSR_MINSTRETH => (self.minstret >> 32) as u32,
+            CSR_MHPMCOUNTER0..=CSR_MHPMCOUNTER31 => 0,
+            CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => 0,
+            CSR_MCOUNTINHIBIT => 0,
+            CSR_MHPM_EVENT0..=CSR_MHPM_EVENT31 => 0,
+
+            CSR_CYCLE => 0,
+            CSR_CYCLEH => 0,
+            CSR_TIME => self.mtime() as u32,
+            CSR_TIMEH => (self.mtime() >> 32) as u32,
+            CSR_INSTRET => self.minstret as u32,
+            CSR_INSTRETH => (self.minstret >> 32) as u32,
+            CSR_HPMCOUNTER0..=CSR_HPMCOUNTER31 => 0,
+            CSR_HPMCOUNTER0H..=CSR_HPMCOUNTER31H => 0,
+
             _ => return None,
         })
     }
 
     fn csr_write(&mut self, csr: u32, value: u32) -> bool {
         match csr {
-            CSR_MSTATUS => self.mstatus = deposit(self.mstatus, 0, 32, value),
-            CSR_MSTATUSH => self.mstatus = deposit(self.mstatus, 32, 32, value),
+            CSR_MSTATUS => {
+                let value = value & MSTATUS_MASK as u32;
+                self.mstatus = deposit(self.mstatus, 0, 32, value);
+            }
+            CSR_MSTATUSH => {
+                let value = value & (MSTATUS_MASK >> 32) as u32;
+                self.mstatus = deposit(self.mstatus, 32, 32, value);
+            }
             CSR_MISA => self.misa = value & MISA_EXT_MASK,
             CSR_MIE => self.mie = value & MIE_MASK,
             CSR_MTVEC => self.mtvec = value & MTVEC_MASK,
             CSR_MIP => self.mip = value,
             CSR_MCAUSE => self.mcause = value,
-            CSR_MEPC => self.mepc = value,
+            CSR_MEPC => self.mepc = value & !1,
             CSR_MSCRATCH => self.mscratch = value,
             CSR_MTVAL => self.mtval = value,
             CSR_MINST => self.minst = value,
+
+            CSR_MCYCLE => {}
+            CSR_MCYCLEH => {}
+            CSR_MINSTRET => self.minstret = deposit(self.minstret, 0, 32, value),
+            CSR_MINSTRETH => self.minstret = deposit(self.minstret, 32, 32, value),
+            CSR_MHPMCOUNTER0..=CSR_MHPMCOUNTER31 => {}
+            CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => {}
+            CSR_MCOUNTINHIBIT => {}
+            CSR_MHPM_EVENT0..=CSR_MHPM_EVENT31 => {}
+
             _ => return false,
         }
         true
@@ -488,7 +535,7 @@ impl<M: Memory> Cpu<M> {
         true
     }
 
-    fn excp(&mut self, cause: u32) {
+    fn excp(&mut self, cause: u32, mtval: u32) {
         if cause >> (mem::size_of_val(&cause) * 8 - 1) == 0 {
             error!("{:x}: exception({cause})", self.pc);
         } else {
@@ -497,6 +544,7 @@ impl<M: Memory> Cpu<M> {
         self.disable_interrupts();
         self.mepc = self.pc;
         self.mcause = cause;
+        self.mtval = mtval;
         self.npc = self.mtvec & !3;
         match self.mtvec & 3 {
             0 => {}
@@ -619,7 +667,7 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
 
         trans_ebreak    = exec(; 0, |cpu, name, _| {
             trace!("{:x}: {name}", cpu.pc);
-            cpu.excp(EXCP_BREAKPOINT);
+            cpu.excp(EXCP_BREAKPOINT, 0);
             true
         }),
     }
