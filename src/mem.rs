@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use crate::device::Device;
 
+pub struct DeviceId(usize);
+
 #[derive(Debug)]
 pub enum Error {
     AccessFault,
@@ -29,7 +31,9 @@ pub trait Memory {
 
     fn write(&mut self, address: usize, data: &[u8]) -> Result<(), Error>;
 
-    fn register_device(&mut self, device: Arc<dyn Device>);
+    fn register_device(&mut self, device: Arc<dyn Device>) -> DeviceId;
+
+    fn get_device_mmio_base(&self, id: DeviceId) -> usize;
 
     fn read_array<const N: usize>(&mut self, address: usize) -> Result<[u8; N], Error> {
         let mut buf = [0; N];
@@ -154,7 +158,13 @@ impl Memory for SimpleMem {
         Ok(())
     }
 
-    fn register_device(&mut self, device: Arc<dyn Device>) {
+    fn register_device(&mut self, device: Arc<dyn Device>) -> DeviceId {
+        let id = DeviceId(self.devices.len());
         self.devices.push(device);
+        id
+    }
+
+    fn get_device_mmio_base(&self, id: DeviceId) -> usize {
+        Self::MMIO_BASE + id.0 * Self::PAGE_SIZE
     }
 }

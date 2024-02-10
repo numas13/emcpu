@@ -25,9 +25,10 @@ fn main() {
     let mut cpu = Cpu::new(0, mem);
 
     cpu.mem.write(0, &bin).unwrap();
-    let interrupt = cpu.device_interrupt(0);
-    cpu.mem
-        .register_device(device::TerminalDevice::new(interrupt));
+    let dev = device::TerminalDevice::new(cpu.device_interrupt(0));
+    let id = cpu.mem.register_device(dev);
+    let base = cpu.mem.get_device_mmio_base(id);
+    info!("terminal MMIO base is {base:#x}");
 
     cpu.run();
 }
