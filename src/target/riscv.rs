@@ -135,7 +135,10 @@ const MISA_EXT_X: u32 = misa_ext(b'x');
 const MISA_EXT_ALL: u32 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
 const MISA_EXT_MASK: u32 = MISA_EXT_ALL ^ MISA_EXT_I;
 
-const MSTATUS_MIE: u64 = 1 << 3;
+const MSTATUS_MIE_OFFSET: u32 = 3;
+const MSTATUS_MIE: u64 = 1 << MSTATUS_MIE_OFFSET;
+const MSTATUS_MPIE_OFFSET: u32 = 7;
+const MSTATUS_MPIE: u64 = 1 << MSTATUS_MPIE_OFFSET;
 const MSTATUS_MASK: u64 = MSTATUS_MIE;
 
 const MIE_MASK: u32 = 0xffff0800;
@@ -175,7 +178,7 @@ pub struct Cpu<M> {
 
 impl<M> Cpu<M> {
     pub fn new(pc: u32, mem: M) -> Self {
-        let (cpu_messages_tx, cpu_messages_rx) = mpsc::sync_channel(0);
+        let (cpu_messages_tx, cpu_messages_rx) = mpsc::sync_channel(32);
 
         Self {
             pc,
@@ -201,7 +204,8 @@ impl<M> Cpu<M> {
     }
 
     pub fn device_interrupt(&mut self, id: u32) -> DeviceInterrupt {
-        assert!(id < (mem::size_of_val(&self.mie) * 8 - 16) as u32);
+        let id = id + 16;
+        assert!(id < mem::size_of_val(&self.mie) as u32 * 8);
         DeviceInterrupt::new(self.cpu_messages_tx.clone(), id)
     }
 
@@ -213,12 +217,12 @@ impl<M> Cpu<M> {
         self.mstatus & MSTATUS_MIE != 0
     }
 
-    fn disable_interrupts(&mut self) {
-        self.mstatus &= !MSTATUS_MIE;
+    fn mpie(&self) -> bool {
+        self.mstatus & MSTATUS_MPIE != 0
     }
 
-    fn enable_interrupts(&mut self) {
-        self.mstatus |= MSTATUS_MIE;
+    fn disable_interrupts(&mut self) {
+        self.mstatus &= !MSTATUS_MIE;
     }
 
     fn mtime(&self) -> u64 {
@@ -239,18 +243,13 @@ impl<M: Memory> Cpu<M> {
         info!("insn execution delay is {SLEEP_TIME:?}");
 
         loop {
-            if self.mie() {
-                if let Ok(msg) = self.cpu_messages_rx.recv_timeout(SLEEP_TIME) {
-                    self.handle_message(msg);
-                }
+            while let Ok(msg) = self.cpu_messages_rx.try_recv() {
+                self.handle_message(msg);
+            }
 
-                if self.mip & self.mie != 0 {
-                    self.handle_interrupt();
-                    self.pc = self.npc;
-                    continue;
-                }
-            } else {
-                thread::sleep(SLEEP_TIME);
+            if self.mie() && self.mip & self.mie != 0 {
+                self.handle_interrupt();
+                self.pc = self.npc;
             }
 
             match self.mem.read_u32_le(self.pc as usize) {
@@ -273,13 +272,15 @@ impl<M: Memory> Cpu<M> {
 
             self.pc = self.npc;
             self.minstret += 1;
+
+            thread::sleep(SLEEP_TIME);
         }
     }
 
     fn handle_message(&mut self, msg: Message) {
         match msg {
             Message::DeviceInterrupt(i) => {
-                self.mip |= 1 << (16 + i);
+                self.mip |= 1 << i;
                 trace!("device interrupt({i}), mip={:08x}", self.mip);
             }
         }
@@ -288,7 +289,6 @@ impl<M: Memory> Cpu<M> {
     fn handle_interrupt(&mut self) {
         let code = (self.mip & 0xffff0800).trailing_zeros();
         trace!("interrupt({code})");
-        self.mip &= !(1 << code);
         self.excp(make_interrupt(code), 0);
     }
 
@@ -495,7 +495,7 @@ impl<M: Memory> Cpu<M> {
             CSR_MISA => self.misa = value & MISA_EXT_MASK,
             CSR_MIE => self.mie = value & MIE_MASK,
             CSR_MTVEC => self.mtvec = value & MTVEC_MASK,
-            CSR_MIP => self.mip = value,
+            CSR_MIP => self.mip = value & MIE_MASK,
             CSR_MCAUSE => self.mcause = value,
             CSR_MEPC => self.mepc = value & !1,
             CSR_MSCRATCH => self.mscratch = value,
@@ -541,6 +541,8 @@ impl<M: Memory> Cpu<M> {
         } else {
             info!("{:x}: interrupt({})", self.pc, cause << 1 >> 1);
         }
+
+        self.mstatus = deposit(self.mstatus, MSTATUS_MPIE_OFFSET, 1, self.mie());
         self.disable_interrupts();
         self.mepc = self.pc;
         self.mcause = cause;
@@ -723,7 +725,7 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_mret      = exec(; 0, |cpu, name, _| {
             trace!("{:x}: {name}", cpu.pc);
             cpu.npc = cpu.mepc;
-            cpu.enable_interrupts();
+            cpu.mstatus = deposit(cpu.mstatus, MSTATUS_MIE_OFFSET, 1, cpu.mpie() as u64);
             true
         }),
 
