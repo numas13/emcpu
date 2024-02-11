@@ -15,30 +15,30 @@ use std::time::Duration;
 use crate::device::DeviceInterrupt;
 use crate::mem::{Error as MemoryError, Memory};
 use crate::target::Message;
-use crate::utils::{deposit, zextract};
+use crate::utils::deposit;
 
 use self::decode::*;
 
-const EXCP_INSN_ADDR_MISALIGNED: u32 = 0;
-const EXCP_INSN_ACCESS_FAULT: u32 = 1;
-const EXCP_ILLEGAL_INSN: u32 = 2;
-const EXCP_BREAKPOINT: u32 = 3;
-//const EXCP_LOAD_ADDR_MISALIGNED: u32 = 4;
-const EXCP_LOAD_ACCESS_FAULT: u32 = 5;
-//const EXCP_STORE_AMO_ADDR_MISALIGNED: u32 = 6;
-const EXCP_STORE_AMO_ACCESS_FAULT: u32 = 7;
-//const EXCP_ECALL_UMODE: u32 = 8;
-//const EXCP_ECALL_SMODE: u32 = 9;
-//const EXCP_ECALL_MMODE: u32 = 11;
-//const EXCP_INSN_PAGE_FAULT: u32 = 12;
-//const EXCP_LOAD_PAGE_FAULT: u32 = 13;
-//const EXCP_STORE_AMO_PAGE_FAULT: u32 = 15;
+const EXCP_INSN_ADDR_MISALIGNED: u64 = 0;
+const EXCP_INSN_ACCESS_FAULT: u64 = 1;
+const EXCP_ILLEGAL_INSN: u64 = 2;
+const EXCP_BREAKPOINT: u64 = 3;
+//const EXCP_LOAD_ADDR_MISALIGNED: u64 = 4;
+const EXCP_LOAD_ACCESS_FAULT: u64 = 5;
+//const EXCP_STORE_AMO_ADDR_MISALIGNED: u64 = 6;
+const EXCP_STORE_AMO_ACCESS_FAULT: u64 = 7;
+//const EXCP_ECALL_UMODE: u64 = 8;
+//const EXCP_ECALL_SMODE: u64 = 9;
+//const EXCP_ECALL_MMODE: u64 = 11;
+//const EXCP_INSN_PAGE_FAULT: u64 = 12;
+//const EXCP_LOAD_PAGE_FAULT: u64 = 13;
+//const EXCP_STORE_AMO_PAGE_FAULT: u64 = 15;
 
-const fn make_interrupt(code: u32) -> u32 {
-    (1 << 31) | code
+const fn make_interrupt(code: u64) -> u64 {
+    (1 << (mem::size_of::<u64>() * 8 - 1)) | code
 }
 
-//const EXCP_MACHINE_EXTERNAL_INT: u32 = make_interrupt(11);
+//const EXCP_MACHINE_EXTERNAL_INT: u64 = make_interrupt(11);
 
 // Unprivileged Floating-Point CSRs
 //const CSR_FFLAGS: u32 = 0x001;
@@ -51,11 +51,11 @@ const CSR_TIME: u32 = 0xc01;
 const CSR_INSTRET: u32 = 0xc02;
 const CSR_HPMCOUNTER0: u32 = 0xc00;
 const CSR_HPMCOUNTER31: u32 = 0xc1f;
-const CSR_CYCLEH: u32 = 0xc80;
-const CSR_TIMEH: u32 = 0xc81;
-const CSR_INSTRETH: u32 = 0xc82;
-const CSR_HPMCOUNTER0H: u32 = 0xc80;
-const CSR_HPMCOUNTER31H: u32 = 0xc9f;
+//const CSR_CYCLEH: u32 = 0xc80;
+//const CSR_TIMEH: u32 = 0xc81;
+//const CSR_INSTRETH: u32 = 0xc82;
+//const CSR_HPMCOUNTER0H: u32 = 0xc80;
+//const CSR_HPMCOUNTER31H: u32 = 0xc9f;
 
 // Machine Information Registers
 const CSR_MVENDOR_ID: u32 = 0xf11;
@@ -72,7 +72,7 @@ const CSR_MIDELEG: u32 = 0x303;
 const CSR_MIE: u32 = 0x304;
 const CSR_MTVEC: u32 = 0x305;
 //const CSR_MCOUTNEREN: u32 = 0x306;
-const CSR_MSTATUSH: u32 = 0x310;
+//const CSR_MSTATUSH: u32 = 0x310;
 
 // Machine Trap Handling
 const CSR_MSCRATCH: u32 = 0x340;
@@ -105,11 +105,11 @@ const CSR_MINST: u32 = 0x34a;
 const CSR_MCYCLE: u32 = 0xb00;
 const CSR_MCYCLEH: u32 = 0xb80;
 const CSR_MINSTRET: u32 = 0xb02;
-const CSR_MINSTRETH: u32 = 0xb82;
+//const CSR_MINSTRETH: u32 = 0xb82;
 const CSR_MHPMCOUNTER0: u32 = 0xb00;
 const CSR_MHPMCOUNTER31: u32 = 0xb1f;
-const CSR_MHPMCOUNTER0H: u32 = 0xb80;
-const CSR_MHPMCOUNTER31H: u32 = 0xb9f;
+//const CSR_MHPMCOUNTER0H: u32 = 0xb80;
+//const CSR_MHPMCOUNTER31H: u32 = 0xb9f;
 
 // Machine Counter Setup
 const CSR_MCOUNTINHIBIT: u32 = 0x320;
@@ -129,7 +129,7 @@ const CSR_MHPM_EVENT31: u32 = 0x33f;
 //const CSR_SCRATCH0: u32 = 0x7b2;
 //const CSR_SCRATCH1: u32 = 0x7b3;
 
-const fn misa_ext(c: u8) -> u32 {
+const fn misa_ext(c: u8) -> u64 {
     match c {
         b'a'..=b'z' => 1 << (c - b'a'),
         b'A'..=b'A' => 1 << (c - b'A'),
@@ -137,11 +137,11 @@ const fn misa_ext(c: u8) -> u32 {
     }
 }
 
-const MISA_EXT_M: u32 = misa_ext(b'm');
-const MISA_EXT_I: u32 = misa_ext(b'i');
-const MISA_EXT_X: u32 = misa_ext(b'x');
-const MISA_DEFAULT: u32 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
-const MISA_EXT_MASK: u32 = MISA_DEFAULT ^ MISA_EXT_I;
+const MISA_EXT_M: u64 = misa_ext(b'm');
+const MISA_EXT_I: u64 = misa_ext(b'i');
+const MISA_EXT_X: u64 = misa_ext(b'x');
+const MISA_DEFAULT: u64 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
+const MISA_EXT_MASK: u64 = MISA_DEFAULT ^ MISA_EXT_I;
 
 const MSTATUS_MIE_OFFSET: u32 = 3;
 const MSTATUS_MIE: u64 = 1 << MSTATUS_MIE_OFFSET;
@@ -149,8 +149,8 @@ const MSTATUS_MPIE_OFFSET: u32 = 7;
 const MSTATUS_MPIE: u64 = 1 << MSTATUS_MPIE_OFFSET;
 const MSTATUS_MASK: u64 = MSTATUS_MIE;
 
-const MIE_MASK: u32 = 0xffff0800;
-const MTVEC_MASK: u32 = 0xfffffffd;
+const MIE_MASK: u64 = 0xffffffff_ffff0800;
+const MTVEC_MASK: u64 = 0xffffffff_fffffffd;
 
 //const MIE_SS: u32 = 1 << 1;
 //const MIE_MS: u32 = 1 << 3;
@@ -169,26 +169,26 @@ pub struct Cpu<M> {
     cpu_messages_tx: mpsc::SyncSender<Message>,
     cpu_messages_rx: mpsc::Receiver<Message>,
 
-    pc: u32,
-    npc: u32,
-    gr: [u32; 32],
+    pc: u64,
+    npc: u64,
+    gr: [u64; 32],
 
     mstatus: u64,
-    misa: u32,
-    mip: u32,
-    mie: u32,
-    mcause: u32,
-    mepc: u32,
-    mtvec: u32,
-    mscratch: u32,
-    mtval: u32,
+    misa: u64,
+    mip: u64,
+    mie: u64,
+    mcause: u64,
+    mepc: u64,
+    mtvec: u64,
+    mscratch: u64,
+    mtval: u64,
     minst: u32,
 
     minstret: u64,
 }
 
 impl<M> Cpu<M> {
-    pub fn new(pc: u32, mem: M) -> Self {
+    pub fn new(pc: u64, mem: M) -> Self {
         let (cpu_messages_tx, cpu_messages_rx) = mpsc::sync_channel(32);
 
         Self {
@@ -220,7 +220,7 @@ impl<M> Cpu<M> {
         DeviceInterrupt::new(self.cpu_messages_tx.clone(), id)
     }
 
-    fn check_ext(&self, ext: u32) -> bool {
+    fn check_ext(&self, ext: u64) -> bool {
         self.misa & ((1 << 26) - 1) & ext == ext
     }
 
@@ -241,7 +241,7 @@ impl<M> Cpu<M> {
         0
     }
 
-    fn write_gr(&mut self, i: usize, value: u32) {
+    fn write_gr(&mut self, i: usize, value: u64) {
         match i {
             0 => {}
             _ => self.gr[i] = value,
@@ -298,47 +298,48 @@ impl<M: Memory> Cpu<M> {
     }
 
     fn handle_interrupt(&mut self) {
-        let code = (self.mip & 0xffff0800).trailing_zeros();
+        let code = (self.mip & 0xffff0800).trailing_zeros() as u64;
         trace!("interrupt({code})");
         self.excp(make_interrupt(code), 0);
     }
 
-    fn exec<T, O>(&mut self, name: &str, args: T, ext: u32, op: O) -> bool
+    fn exec<T, O>(&mut self, name: &str, args: T, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, &str, T) -> bool,
     {
         self.check_ext(ext) && op(self, name, args)
     }
 
-    fn exec_b<O>(&mut self, name: &str, b: &args_b, ext: u32, op: O) -> bool
+    fn exec_b<O>(&mut self, name: &str, b: &args_b, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, u32, u32) -> bool,
+        O: Fn(&mut Self, u64, u64) -> bool,
     {
         self.exec(name, b, ext, |cpu, name, b| {
             let s1 = cpu.gr[b.rs1 as usize];
             let s2 = cpu.gr[b.rs2 as usize];
+            let imm = b.imm as i32;
             trace!(
                 "{:x}: {name}\tx{}={s1}, x{}={s2}, {}",
                 cpu.pc,
                 b.rs1,
                 b.rs2,
-                b.imm as i32
+                imm
             );
             if op(cpu, s1, s2) {
-                cpu.npc = cpu.pc.wrapping_add(b.imm as u32);
+                cpu.npc = cpu.pc.wrapping_add(imm as u64);
             }
             true
         })
     }
 
-    fn exec_i<O>(&mut self, name: &str, i: &args_i, ext: u32, op: O) -> bool
+    fn exec_i<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, u32, u32) -> u32,
+        O: Fn(&mut Self, u64, u64) -> u64,
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.imm as u32;
-            let res = op(cpu, s1, imm);
+            let imm = i.imm as i32;
+            let res = op(cpu, s1, imm as u64);
             trace!(
                 "{:x}: {name}\tx{}={res}, x{}={s1}, {imm}",
                 cpu.pc,
@@ -350,26 +351,35 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_u<O>(&mut self, name: &str, u: &args_u, ext: u32, op: O) -> bool
+    fn exec_i32<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, u32) -> u32,
+        O: Fn(&mut Self, u32, u32) -> u32,
+    {
+        self.exec_i(name, i, ext, |cpu, a, b| {
+            op(cpu, a as u32, b as u32) as i32 as u64
+        })
+    }
+
+    fn exec_u<O>(&mut self, name: &str, u: &args_u, ext: u64, op: O) -> bool
+    where
+        O: Fn(&mut Self, u64) -> u64,
     {
         self.exec(name, u, ext, |cpu, name, u| {
-            let imm = u.imm as u32;
-            let res = op(cpu, imm);
+            let imm = u.imm as i32;
+            let res = op(cpu, imm as u64);
             trace!("{:x}: {name}\tx{}={res}, {imm:x}", cpu.pc, u.rd);
             cpu.write_gr(u.rd as usize, res);
             true
         })
     }
 
-    fn exec_shift<O>(&mut self, name: &str, i: &args_shift, ext: u32, op: O) -> bool
+    fn exec_shift<O>(&mut self, name: &str, i: &args_shift, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, u32, u32) -> u32,
+        O: Fn(&mut Self, u64, u64) -> u64,
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.shamt as u32;
+            let imm = i.shamt as u64;
             let res = op(cpu, s1, imm);
             trace!(
                 "{:x}: {name}\tx{}={res}, x{}={s1}, {imm}",
@@ -382,9 +392,18 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_r<O>(&mut self, name: &str, r: &args_r, ext: u32, op: O) -> bool
+    fn exec_shift32<O>(&mut self, name: &str, i: &args_shift, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u32, u32) -> u32,
+    {
+        self.exec_shift(name, i, ext, |cpu, a, b| {
+            op(cpu, a as u32, b as u32) as i32 as u64
+        })
+    }
+
+    fn exec_r<O>(&mut self, name: &str, r: &args_r, ext: u64, op: O) -> bool
+    where
+        O: Fn(&mut Self, u64, u64) -> u64,
     {
         self.exec(name, r, ext, |cpu, name, r| {
             let s1 = cpu.gr[r.rs1 as usize];
@@ -402,15 +421,29 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_l<O>(&mut self, name: &str, i: &args_i, ext: u32, op: O) -> bool
+    fn exec_r32<O>(&mut self, name: &str, r: &args_r, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, usize) -> Result<u32, MemoryError>,
+        O: Fn(&mut Self, u32, u32) -> u32,
+    {
+        self.exec_r(name, r, ext, |cpu, a, b| {
+            op(cpu, a as u32, b as u32) as i32 as u64
+        })
+    }
+
+    fn exec_l<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
+    where
+        O: Fn(&mut Self, usize) -> Result<u64, MemoryError>,
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
             let imm = i.imm as i32;
-            let addr = s1.wrapping_add(imm as u32);
-            trace!("{:x}: {name}\tx{}, {imm}(x{}={s1})", cpu.pc, i.rd, i.rs1);
+            let addr = s1.wrapping_add(imm as u64);
+            trace!(
+                "{:x}: {name}\tx{}, {imm:x}(x{}={s1:x})",
+                cpu.pc,
+                i.rd,
+                i.rs1
+            );
             match op(cpu, addr as usize) {
                 Ok(value) => {
                     cpu.write_gr(i.rd as usize, value);
@@ -423,17 +456,17 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_s<O>(&mut self, name: &str, s: &args_s, ext: u32, op: O) -> bool
+    fn exec_s<O>(&mut self, name: &str, s: &args_s, ext: u64, op: O) -> bool
     where
-        O: Fn(&mut Self, usize, u32) -> Result<(), MemoryError>,
+        O: Fn(&mut Self, usize, u64) -> Result<(), MemoryError>,
     {
         self.exec(name, s, ext, |cpu, name, s| {
             let s1 = cpu.gr[s.rs1 as usize];
             let s2 = cpu.gr[s.rs2 as usize];
             let imm = s.imm as i32;
-            let addr = s1.wrapping_add(imm as u32);
+            let addr = s1.wrapping_add(imm as u64);
             trace!(
-                "{:x}: {name}\tx{}={s2}, {imm}(x{}={s1})",
+                "{:x}: {name}\tx{}={s2}, {imm:x}(x{}={s1:x})",
                 cpu.pc,
                 s.rs2,
                 s.rs1
@@ -449,7 +482,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn csr_read(&mut self, csr: u32) -> Option<u32> {
+    fn csr_read(&mut self, csr: u32) -> Option<u64> {
         Some(match csr {
             CSR_MVENDOR_ID => 0,
             CSR_MARCH_ID => 0,
@@ -457,8 +490,8 @@ impl<M: Memory> Cpu<M> {
             CSR_MHART_ID => 0,
             CSR_MCONFIG_PTR => 0,
 
-            CSR_MSTATUS => self.mstatus as u32,
-            CSR_MSTATUSH => zextract(self.mstatus, 32, 32) as u32,
+            CSR_MSTATUS => self.mstatus,
+            //CSR_MSTATUSH => zextract(self.mstatus, 32, 32) as u32,
             CSR_MISA => self.misa,
             CSR_MIE => self.mie,
             CSR_MTVEC => self.mtvec,
@@ -467,42 +500,42 @@ impl<M: Memory> Cpu<M> {
             CSR_MEPC => self.mepc,
             CSR_MSCRATCH => self.mscratch,
             CSR_MTVAL => self.mtval,
-            CSR_MINST => self.minst,
+            CSR_MINST => self.minst as u64,
             CSR_MEDELEG => 0,
             CSR_MIDELEG => 0,
 
             CSR_MCYCLE => 0,
             CSR_MCYCLEH => 0,
-            CSR_MINSTRET => self.minstret as u32,
-            CSR_MINSTRETH => (self.minstret >> 32) as u32,
+            CSR_MINSTRET => self.minstret,
+            //CSR_MINSTRETH => (self.minstret >> 32) as u32,
             CSR_MHPMCOUNTER0..=CSR_MHPMCOUNTER31 => 0,
-            CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => 0,
+            //CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => 0,
             CSR_MCOUNTINHIBIT => 0,
             CSR_MHPM_EVENT0..=CSR_MHPM_EVENT31 => 0,
 
             CSR_CYCLE => 0,
-            CSR_CYCLEH => 0,
-            CSR_TIME => self.mtime() as u32,
-            CSR_TIMEH => (self.mtime() >> 32) as u32,
-            CSR_INSTRET => self.minstret as u32,
-            CSR_INSTRETH => (self.minstret >> 32) as u32,
+            //CSR_CYCLEH => 0,
+            CSR_TIME => self.mtime(),
+            //CSR_TIMEH => (self.mtime() >> 32),
+            CSR_INSTRET => self.minstret,
+            //CSR_INSTRETH => (self.minstret >> 32) as u32,
             CSR_HPMCOUNTER0..=CSR_HPMCOUNTER31 => 0,
-            CSR_HPMCOUNTER0H..=CSR_HPMCOUNTER31H => 0,
-
+            //CSR_HPMCOUNTER0H..=CSR_HPMCOUNTER31H => 0,
             _ => return None,
         })
     }
 
-    fn csr_write(&mut self, csr: u32, value: u32) -> bool {
+    fn csr_write(&mut self, csr: u32, value: u64) -> bool {
         match csr {
-            CSR_MSTATUS => {
-                let value = value & MSTATUS_MASK as u32;
-                self.mstatus = deposit(self.mstatus, 0, 32, value);
-            }
-            CSR_MSTATUSH => {
-                let value = value & (MSTATUS_MASK >> 32) as u32;
-                self.mstatus = deposit(self.mstatus, 32, 32, value);
-            }
+            CSR_MSTATUS => self.mstatus = value & MSTATUS_MASK,
+            // CSR_MSTATUS => {
+            //     let value = value & MSTATUS_MASK as u32;
+            //     self.mstatus = deposit(self.mstatus, 0, 32, value);
+            // }
+            // CSR_MSTATUSH => {
+            //     let value = value & (MSTATUS_MASK >> 32) as u32;
+            //     self.mstatus = deposit(self.mstatus, 32, 32, value);
+            // }
             CSR_MISA => self.misa = value & MISA_EXT_MASK,
             CSR_MIE => self.mie = value & MIE_MASK,
             CSR_MTVEC => self.mtvec = value & MTVEC_MASK,
@@ -511,14 +544,15 @@ impl<M: Memory> Cpu<M> {
             CSR_MEPC => self.mepc = value & !1,
             CSR_MSCRATCH => self.mscratch = value,
             CSR_MTVAL => self.mtval = value,
-            CSR_MINST => self.minst = value,
+            CSR_MINST => self.minst = value as u32,
 
             CSR_MCYCLE => {}
-            CSR_MCYCLEH => {}
-            CSR_MINSTRET => self.minstret = deposit(self.minstret, 0, 32, value),
-            CSR_MINSTRETH => self.minstret = deposit(self.minstret, 32, 32, value),
+            //CSR_MCYCLEH => {}
+            CSR_MINSTRET => self.minstret = value,
+            //CSR_MINSTRET => self.minstret = deposit(self.minstret, 0, 32, value),
+            //CSR_MINSTRETH => self.minstret = deposit(self.minstret, 32, 32, value),
             CSR_MHPMCOUNTER0..=CSR_MHPMCOUNTER31 => {}
-            CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => {}
+            //CSR_MHPMCOUNTER0H..=CSR_MHPMCOUNTER31H => {}
             CSR_MCOUNTINHIBIT => {}
             CSR_MHPM_EVENT0..=CSR_MHPM_EVENT31 => {}
 
@@ -527,9 +561,9 @@ impl<M: Memory> Cpu<M> {
         true
     }
 
-    fn exec_csr<O>(&mut self, csr: isize, rr: bool, wr: bool, value: u32, rd: isize, op: O) -> bool
+    fn exec_csr<O>(&mut self, csr: isize, rr: bool, wr: bool, value: u64, rd: isize, op: O) -> bool
     where
-        O: Fn(u32, u32) -> u32,
+        O: Fn(u64, u64) -> u64,
     {
         let old = if rr {
             match self.csr_read(csr as u32) {
@@ -546,7 +580,7 @@ impl<M: Memory> Cpu<M> {
         true
     }
 
-    fn excp(&mut self, cause: u32, mtval: u32) {
+    fn excp(&mut self, cause: u64, mtval: u64) {
         if cause >> (mem::size_of_val(&cause) * 8 - 1) == 0 {
             error!("{:x}: exception({cause})", self.pc);
         } else {
@@ -592,15 +626,16 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         value << 1
     }
 
-    // RV32I Base Instruction Set
+    // RV64I Base Instruction Set
     #[rustfmt::skip]
     trans! {
         trans_lui       = exec_u(u: &args_u; 0, |_, i| i),
         trans_auipc     = exec_u(u: &args_u; 0, |cpu, i| cpu.pc.wrapping_add(i)),
 
         trans_jal       = exec(j: &args_j; 0, |cpu, name, j| {
-            let npc = cpu.pc.wrapping_add(j.imm as u32);
-            trace!("{:x}: {name}\tx{}, {} # {npc:x}", cpu.pc, j.rd, j.imm as i32);
+            let imm = j.imm as i32;
+            let npc = cpu.pc.wrapping_add(imm as u64);
+            trace!("{:x}: {name}\tx{}, {imm} # {npc:x}", cpu.pc, j.rd);
             cpu.write_gr(j.rd as usize, cpu.npc);
             cpu.npc = npc;
             true
@@ -608,8 +643,9 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
 
         trans_jalr      = exec(i: &args_i; 0, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let npc = s1.wrapping_add(i.imm as u32);
-            trace!("{:x}: {name}\tx{}, x{}={s1}, {} # {npc:x}", cpu.pc, i.rd, i.rs1, i.imm as i32);
+            let imm = i.imm as i32;
+            let npc = s1.wrapping_add(imm as u64);
+            trace!("{:x}: {name}\tx{}, x{}={s1}, {imm} # {npc:x}", cpu.pc, i.rd, i.rs1);
             cpu.write_gr(i.rd as usize, cpu.npc);
             cpu.npc = npc;
             true
@@ -617,8 +653,8 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
 
         trans_beq       = exec_b(b: &args_b; 0, |_, a, b| a == b),
         trans_bne       = exec_b(b: &args_b; 0, |_, a, b| a != b),
-        trans_blt       = exec_b(b: &args_b; 0, |_, a, b| (a as i32) < (b as i32)),
-        trans_bge       = exec_b(b: &args_b; 0, |_, a, b| (a as i32) >= (b as i32)),
+        trans_blt       = exec_b(b: &args_b; 0, |_, a, b| (a as i64) < (b as i64)),
+        trans_bge       = exec_b(b: &args_b; 0, |_, a, b| (a as i64) >= (b as i64)),
         trans_bltu      = exec_b(b: &args_b; 0, |_, a, b| a < b),
         trans_bgeu      = exec_b(b: &args_b; 0, |_, a, b| a >= b),
 
@@ -629,8 +665,8 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_slti      = exec_i(i: &args_i; 0, |_, a, b| slt(a, b)),
         trans_sltiu     = exec_i(i: &args_i; 0, |_, a, b| sltu(a, b)),
 
-        trans_slli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b)),
-        trans_srli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_slli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b as u32)),
+        trans_srli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b as u32)),
         trans_srai      = exec_shift(i: &args_shift; 0, |_, a, b| sra(a, b)),
 
         trans_and       = exec_r(r: &args_r; 0, |_, a, b| a & b),
@@ -640,19 +676,34 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_sub       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
         trans_slt       = exec_r(r: &args_r; 0, |_, a, b| slt(a, b)),
         trans_sltu      = exec_r(r: &args_r; 0, |_, a, b| sltu(a, b)),
-        trans_sll       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shl(b)),
-        trans_srl       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sll       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shl(b as u32)),
+        trans_srl       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shr(b as u32)),
         trans_sra       = exec_r(r: &args_r; 0, |_, a, b| sra(a, b)),
 
-        trans_lb        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u32)),
-        trans_lh        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u32)),
-        trans_lw        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i32_le(a)),
-        trans_lbu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u32)),
-        trans_lhu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u32)),
+        trans_addiw     = exec_i32(i: &args_i; 0, |_, a, b| a.wrapping_add(b)),
+
+        trans_slliw     = exec_shift32(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srliw     = exec_shift32(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sraiw     = exec_shift32(i: &args_shift; 0, |_, a, b| sraw(a, b)),
+
+        trans_addw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_add(b)),
+        trans_subw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
+        trans_sllw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srlw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sraw      = exec_r32(r: &args_r; 0, |_, a, b| sraw(a, b)),
+
+        trans_lb        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u64)),
+        trans_lh        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u64)),
+        trans_lw        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i32_le(a).map(|i| i as i32 as u64)),
+        trans_ld        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i64_le(a)),
+        trans_lbu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u64)),
+        trans_lhu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u64)),
+        trans_lwu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u32_le(a).map(|i| i as u64)),
 
         trans_sb        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u8(a, v as u8)),
         trans_sh        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u16_le(a, v as u16)),
-        trans_sw        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u32_le(a, v)),
+        trans_sw        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u32_le(a, v as u32)),
+        trans_sd        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u64_le(a, v)),
 
         trans_fence     = exec(pred: isize, succ: isize; 0, |cpu, name, _| {
             trace!("{:x}: {name}", cpu.pc);
@@ -685,7 +736,7 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         }),
     }
 
-    // RV32/RV64 Zicsr Standard Extension
+    // RV64 Zicsr Standard Extension
     #[rustfmt::skip]
     trans! {
         trans_csrrw     = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
@@ -705,19 +756,19 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         }),
         trans_csrrwi    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
-            cpu.exec_csr(csr, rd != 0, true, rs1 as u32, rd, |_, b| b)
+            cpu.exec_csr(csr, rd != 0, true, rs1 as u64, rd, |_, b| b)
         }),
         trans_csrrsi    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
-            cpu.exec_csr(csr, true, rs1 != 0, rs1 as u32, rd, |a, b| a | b)
+            cpu.exec_csr(csr, true, rs1 != 0, rs1 as u64, rd, |a, b| a | b)
         }),
         trans_csrrci    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
-            cpu.exec_csr(csr, true, rs1 != 0, rs1 as u32, rd, |a, b| a & !b)
+            cpu.exec_csr(csr, true, rs1 != 0, rs1 as u64, rd, |a, b| a & !b)
         }),
     }
 
-    // RV32M Standard Extension
+    // RV64M Standard Extension
     #[rustfmt::skip]
     trans! {
         trans_mul       = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| mul(a, b)),
@@ -728,6 +779,12 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_divu      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| divu(a, b)),
         trans_rem       = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| rem(a, b)),
         trans_remu      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| remu(a, b)),
+
+        trans_mulw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| mulw(a, b)),
+        trans_divw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| divw(a, b)),
+        trans_divuw     = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| divuw(a, b)),
+        trans_remw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| remw(a, b)),
+        trans_remuw     = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| remuw(a, b)),
     }
 
     // Privileged Instructions
@@ -750,35 +807,68 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
     }
 }
 
-fn slt(a: u32, b: u32) -> u32 {
-    ((a as i32) < (b as i32)) as u32
+fn slt(a: u64, b: u64) -> u64 {
+    ((a as i64) < (b as i64)) as u64
 }
 
-fn sltu(a: u32, b: u32) -> u32 {
-    (a < b) as u32
+fn sltu(a: u64, b: u64) -> u64 {
+    (a < b) as u64
 }
 
-fn sra(a: u32, b: u32) -> u32 {
+fn sra(a: u64, b: u64) -> u64 {
+    (a as i64).wrapping_shr(b as u32) as u64
+}
+
+fn sraw(a: u32, b: u32) -> u32 {
     (a as i32).wrapping_shr(b) as u32
 }
 
-fn mul(a: u32, b: u32) -> u32 {
+fn mulw(a: u32, b: u32) -> u32 {
     (a as i32).wrapping_mul(b as i32) as u32
 }
 
-fn mulh(a: u32, b: u32) -> u32 {
-    ((a as i64).wrapping_mul(b as i64) >> 32) as u32
+fn mul(a: u64, b: u64) -> u64 {
+    (a as i64).wrapping_mul(b as i64) as u64
 }
 
-fn mulhsu(a: u32, b: u32) -> u32 {
-    ((a as i64).wrapping_mul(b as u64 as i64) >> 32) as u32
+fn mulh(a: u64, b: u64) -> u64 {
+    ((a as i128).wrapping_mul(b as i128) >> 64) as u64
 }
 
-fn mulhu(a: u32, b: u32) -> u32 {
-    ((a as u64).wrapping_mul(b as u64) >> 32) as u32
+fn mulhsu(a: u64, b: u64) -> u64 {
+    ((a as i128).wrapping_mul(b as u128 as i128) >> 64) as u64
 }
 
-fn div(a: u32, b: u32) -> u32 {
+fn mulhu(a: u64, b: u64) -> u64 {
+    ((a as u128).wrapping_mul(b as u128) >> 64) as u64
+}
+
+fn div(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        return u64::MAX;
+    }
+    (a as i64)
+        .checked_div(b as i64)
+        .map(|i| i as u64)
+        .unwrap_or(u64::MAX >> 1)
+}
+
+fn divu(a: u64, b: u64) -> u64 {
+    a.checked_div(b).unwrap_or(u64::MAX - 1)
+}
+
+fn rem(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        return a;
+    }
+    (a as i64).checked_rem(b as i64).unwrap_or(0) as u64
+}
+
+fn remu(a: u64, b: u64) -> u64 {
+    a.checked_rem(b).unwrap_or(a)
+}
+
+fn divw(a: u32, b: u32) -> u32 {
     if b == 0 {
         return u32::MAX;
     }
@@ -788,17 +878,17 @@ fn div(a: u32, b: u32) -> u32 {
         .unwrap_or(u32::MAX >> 1)
 }
 
-fn divu(a: u32, b: u32) -> u32 {
+fn divuw(a: u32, b: u32) -> u32 {
     a.checked_div(b).unwrap_or(u32::MAX - 1)
 }
 
-fn rem(a: u32, b: u32) -> u32 {
+fn remw(a: u32, b: u32) -> u32 {
     if b == 0 {
         return a;
     }
     (a as i32).checked_rem(b as i32).unwrap_or(0) as u32
 }
 
-fn remu(a: u32, b: u32) -> u32 {
+fn remuw(a: u32, b: u32) -> u32 {
     a.checked_rem(b).unwrap_or(a)
 }
