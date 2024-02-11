@@ -137,10 +137,11 @@ const fn misa_ext(c: u8) -> u64 {
     }
 }
 
+const MISA_EXT_C: u64 = misa_ext(b'c');
 const MISA_EXT_M: u64 = misa_ext(b'm');
 const MISA_EXT_I: u64 = misa_ext(b'i');
 const MISA_EXT_X: u64 = misa_ext(b'x');
-const MISA_DEFAULT: u64 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
+const MISA_DEFAULT: u64 = MISA_EXT_C | MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
 const MISA_EXT_MASK: u64 = MISA_DEFAULT ^ MISA_EXT_I;
 
 const MSTATUS_MIE_OFFSET: u32 = 3;
@@ -263,28 +264,56 @@ impl<M: Memory> Cpu<M> {
                 self.pc = self.npc;
             }
 
-            match self.mem.read_u32_le(self.pc as usize) {
-                Ok(insn) => {
-                    self.npc = self.pc + 4;
-
-                    if self.pc & 3 != 0 {
-                        // TODO: lower priority than illegal insn exception
-                        self.excp(EXCP_INSN_ADDR_MISALIGNED, 0);
-                    } else if !RiscvDecode32::decode(self, insn) {
-                        trace!("{:x}: illegal instruction {insn:x}", self.pc);
-                        self.minst = insn;
-                        self.excp(EXCP_ILLEGAL_INSN, 0);
-                    }
-                }
-                Err(MemoryError::AccessFault) => {
-                    self.excp(EXCP_INSN_ACCESS_FAULT, 0);
-                }
-            }
-
+            self.decode();
             self.pc = self.npc;
             self.minstret += 1;
 
             thread::sleep(SLEEP_TIME);
+        }
+    }
+
+    fn decode32(&mut self, insn: u32) {
+        if !RiscvDecode32::decode(self, insn) {
+            trace!("{:x}: illegal instruction {insn:x}", self.pc);
+            self.minst = insn;
+            self.excp(EXCP_ILLEGAL_INSN, 0);
+        }
+    }
+
+    fn decode16(&mut self, insn: u16) {
+        if !RiscvDecode16::decode(self, insn) {
+            trace!("{:x}: illegal instruction {insn:x}", self.pc);
+            self.minst = insn as u32;
+            self.excp(EXCP_ILLEGAL_INSN, 0);
+        }
+    }
+
+    fn decode(&mut self) {
+        if self.pc & 1 != 0 {
+            self.excp(EXCP_INSN_ADDR_MISALIGNED, 0);
+            return;
+        }
+
+        match self.mem.read_u16_le(self.pc as usize) {
+            Ok(lo) => {
+                if lo & 3 == 3 {
+                    match self.mem.read_u16_le(self.pc as usize + 2) {
+                        Ok(hi) => {
+                            self.npc = self.pc + 4;
+                            self.decode32(((hi as u32) << 16) | lo as u32);
+                        }
+                        Err(MemoryError::AccessFault) => {
+                            self.excp(EXCP_INSN_ACCESS_FAULT, 0);
+                        }
+                    }
+                } else {
+                    self.npc = self.pc + 2;
+                    self.decode16(lo);
+                }
+            }
+            Err(MemoryError::AccessFault) => {
+                self.excp(EXCP_INSN_ACCESS_FAULT, 0);
+            }
         }
     }
 
@@ -338,13 +367,13 @@ impl<M: Memory> Cpu<M> {
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.imm as i32;
-            let res = op(cpu, s1, imm as u64);
+            let res = op(cpu, s1, i.imm as u64);
             trace!(
-                "{:x}: {name}\tx{}={res}, x{}={s1}, {imm}",
+                "{:x}: {name}\tx{}={res}, x{}={s1}, {}",
                 cpu.pc,
                 i.rd,
-                i.rs1
+                i.rs1,
+                i.imm
             );
             cpu.write_gr(i.rd as usize, res);
             true
@@ -365,9 +394,8 @@ impl<M: Memory> Cpu<M> {
         O: Fn(&mut Self, u64) -> u64,
     {
         self.exec(name, u, ext, |cpu, name, u| {
-            let imm = u.imm as i32;
-            let res = op(cpu, imm as u64);
-            trace!("{:x}: {name}\tx{}={res}, {imm:x}", cpu.pc, u.rd);
+            let res = op(cpu, u.imm as u64);
+            trace!("{:x}: {name}\tx{}={res}, {:x}", cpu.pc, u.rd, u.imm);
             cpu.write_gr(u.rd as usize, res);
             true
         })
@@ -379,13 +407,13 @@ impl<M: Memory> Cpu<M> {
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.shamt as u64;
-            let res = op(cpu, s1, imm);
+            let res = op(cpu, s1, i.shamt as u64);
             trace!(
-                "{:x}: {name}\tx{}={res}, x{}={s1}, {imm}",
+                "{:x}: {name}\tx{}={res}, x{}={s1}, {}",
                 cpu.pc,
                 i.rd,
-                i.rs1
+                i.rs1,
+                i.shamt
             );
             cpu.write_gr(i.rd as usize, res);
             true
@@ -436,12 +464,12 @@ impl<M: Memory> Cpu<M> {
     {
         self.exec(name, i, ext, |cpu, name, i| {
             let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.imm as i32;
-            let addr = s1.wrapping_add(imm as u64);
+            let addr = s1.wrapping_add(i.imm as u64);
             trace!(
-                "{:x}: {name}\tx{}, {imm:x}(x{}={s1:x})",
+                "{:x}: {name}\tx{}, {:x}(x{}={s1:x})",
                 cpu.pc,
                 i.rd,
+                i.imm,
                 i.rs1
             );
             match op(cpu, addr as usize) {
@@ -463,12 +491,12 @@ impl<M: Memory> Cpu<M> {
         self.exec(name, s, ext, |cpu, name, s| {
             let s1 = cpu.gr[s.rs1 as usize];
             let s2 = cpu.gr[s.rs2 as usize];
-            let imm = s.imm as i32;
-            let addr = s1.wrapping_add(imm as u64);
+            let addr = s1.wrapping_add(s.imm as u64);
             trace!(
-                "{:x}: {name}\tx{}={s2}, {imm:x}(x{}={s1:x})",
+                "{:x}: {name}\tx{}={s2}, {:x}(x{}={s1:x})",
                 cpu.pc,
                 s.rs2,
+                s.imm,
                 s.rs1
             );
             if let Err(err) = op(cpu, addr as usize, s2) {
@@ -599,6 +627,29 @@ impl<M: Memory> Cpu<M> {
             _ => todo!(),
         };
     }
+
+    fn jal(&mut self, name: &str, j: &args_j) -> bool {
+        let npc = self.pc.wrapping_add(j.imm as u64);
+        trace!("{:x}: {name}\tx{}, {} # {npc:x}", self.pc, j.rd, j.imm);
+        self.write_gr(j.rd as usize, self.npc);
+        self.npc = npc;
+        true
+    }
+
+    fn jalr(&mut self, name: &str, i: &args_i) -> bool {
+        let s1 = self.gr[i.rs1 as usize];
+        let npc = s1.wrapping_add(i.imm as u64);
+        trace!(
+            "{:x}: {name}\tx{}, x{}={s1}, {} # {npc:x}",
+            self.pc,
+            i.rd,
+            i.rs1,
+            i.imm
+        );
+        self.write_gr(i.rd as usize, self.npc);
+        self.npc = npc;
+        true
+    }
 }
 
 macro_rules! trans {
@@ -607,6 +658,105 @@ macro_rules! trans {
             self.$exec(stringify!($func), ($($arg),*), $($param,)*)
         })+
     );
+}
+
+macro_rules! forward_c {
+    ($($func:ident($($arg:ident : $ty:ty),* $(,)?)),+ $(,)?) => (
+        $(fn $func(&mut self, $($arg: $ty),*) -> bool {
+            self.check_ext(MISA_EXT_C) && <Self as RiscvDecode32>::$func(self, $($arg),*)
+        })+
+    );
+}
+
+impl<M: Memory> RiscvDecode16 for Cpu<M> {
+    fn ex_shift_1(&mut self, value: isize) -> isize {
+        value << 1
+    }
+
+    fn ex_shift_2(&mut self, value: isize) -> isize {
+        value << 2
+    }
+
+    fn ex_shift_3(&mut self, value: isize) -> isize {
+        value << 3
+    }
+
+    fn ex_shift_4(&mut self, value: isize) -> isize {
+        value << 4
+    }
+
+    fn ex_shift_12(&mut self, value: isize) -> isize {
+        value << 12
+    }
+
+    fn ex_rvc_shiftli(&mut self, value: isize) -> isize {
+        value
+    }
+
+    fn ex_rvc_shiftri(&mut self, value: isize) -> isize {
+        value
+    }
+
+    fn ex_rvc_register(&mut self, value: isize) -> isize {
+        value + 8
+    }
+
+    fn ex_sreg_register(&mut self, _value: isize) -> isize {
+        todo!("ex_sreg_register")
+    }
+
+    // RVC Standard Extension
+    #[rustfmt::skip]
+    trans! {
+        trans_illegal   = exec(; 0, |cpu, _, _| {
+            trace!("{:x}: c.illegal", cpu.pc);
+            false
+        }),
+
+        trans_c64_illegal   = exec(; 0, |cpu, _, _| {
+            trace!("{:x}: c64.illegal", cpu.pc);
+            false
+        }),
+    }
+
+    // RVC Standard Extension
+    #[rustfmt::skip]
+    forward_c! {
+        trans_lui(u: &args_u),
+
+        trans_jal(j: &args_j),
+        trans_jalr(j: &args_i),
+
+        trans_beq(b: &args_b),
+        trans_bne(b: &args_b),
+
+        trans_lw(i: &args_i),
+        trans_ld(i: &args_i),
+
+        trans_sw(s: &args_s),
+        trans_sd(s: &args_s),
+
+        trans_andi(i: &args_i),
+
+        trans_slli(i: &args_shift),
+        trans_srli(i: &args_shift),
+        trans_srai(i: &args_shift),
+
+        trans_addi(i: &args_i),
+
+        trans_and(r: &args_r),
+        trans_or(r: &args_r),
+        trans_xor(r: &args_r),
+        trans_add(r: &args_r),
+        trans_sub(r: &args_r),
+
+        trans_addiw(i: &args_i),
+
+        trans_addw(r: &args_r),
+        trans_subw(r: &args_r),
+
+        trans_ebreak(),
+    }
 }
 
 impl<M: Memory> RiscvDecode32 for Cpu<M> {
@@ -632,24 +782,8 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
         trans_lui       = exec_u(u: &args_u; 0, |_, i| i),
         trans_auipc     = exec_u(u: &args_u; 0, |cpu, i| cpu.pc.wrapping_add(i)),
 
-        trans_jal       = exec(j: &args_j; 0, |cpu, name, j| {
-            let imm = j.imm as i32;
-            let npc = cpu.pc.wrapping_add(imm as u64);
-            trace!("{:x}: {name}\tx{}, {imm} # {npc:x}", cpu.pc, j.rd);
-            cpu.write_gr(j.rd as usize, cpu.npc);
-            cpu.npc = npc;
-            true
-        }),
-
-        trans_jalr      = exec(i: &args_i; 0, |cpu, name, i| {
-            let s1 = cpu.gr[i.rs1 as usize];
-            let imm = i.imm as i32;
-            let npc = s1.wrapping_add(imm as u64);
-            trace!("{:x}: {name}\tx{}, x{}={s1}, {imm} # {npc:x}", cpu.pc, i.rd, i.rs1);
-            cpu.write_gr(i.rd as usize, cpu.npc);
-            cpu.npc = npc;
-            true
-        }),
+        trans_jal       = exec(j: &args_j; 0, Self::jal),
+        trans_jalr      = exec(i: &args_i; 0, Self::jalr),
 
         trans_beq       = exec_b(b: &args_b; 0, |_, a, b| a == b),
         trans_bne       = exec_b(b: &args_b; 0, |_, a, b| a != b),

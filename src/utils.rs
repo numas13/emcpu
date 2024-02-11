@@ -1,19 +1,30 @@
-pub trait Extract: Sized {
-    fn zextract(&self, pos: u32, len: u32) -> Self;
-    fn sextract(&self, pos: u32, len: u32) -> Self;
+use std::mem;
+
+pub trait ZExtract<U>: Sized {
+    fn zextract(&self, pos: u32, len: u32) -> U;
+}
+
+pub trait SExtract<S>: Sized {
+    fn sextract(&self, pos: u32, len: u32) -> S;
 }
 
 macro_rules! impl_extract {
     ($($uint:ty = $sint:ty),+ $(,)?) => (
-        $(impl Extract for $uint {
-            fn zextract(&self, pos: u32, len: u32) -> Self {
-                ((*self as $uint << (32 - pos - len)) >> (32 - len)) as Self
+        $(
+            impl ZExtract<$uint> for $uint {
+                fn zextract(&self, pos: u32, len: u32) -> $uint {
+                    let w = mem::size_of::<$uint>() as u32 * 8;
+                    (*self as $uint << (w - pos - len)) >> (w - len)
+                }
             }
 
-            fn sextract(&self, pos: u32, len: u32) -> Self {
-                ((*self as $uint << (32 - pos - len)) as $sint >> (32 - len)) as Self
+            impl SExtract<$sint> for $uint {
+                fn sextract(&self, pos: u32, len: u32) -> $sint {
+                    let w = mem::size_of::<$uint>() as u32 * 8;
+                    (*self as $uint << (w - pos - len)) as $sint >> (w - len)
+                }
             }
-        })+
+        )+
     );
 }
 
@@ -25,11 +36,11 @@ impl_extract! {
     u128 = i128,
 }
 
-pub fn zextract<T: Extract>(value: T, pos: u32, len: u32) -> T {
+pub fn zextract<U, T: ZExtract<U>>(value: T, pos: u32, len: u32) -> U {
     value.zextract(pos, len)
 }
 
-pub fn sextract<T: Extract>(value: T, pos: u32, len: u32) -> T {
+pub fn sextract<S, T: SExtract<S>>(value: T, pos: u32, len: u32) -> S {
     value.sextract(pos, len)
 }
 
