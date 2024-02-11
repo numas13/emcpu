@@ -10,7 +10,7 @@ pub struct DeviceInterrupt {
 }
 
 impl DeviceInterrupt {
-    pub fn new(tx: mpsc::SyncSender<Message>, id: u32) -> Self {
+    pub(crate) fn new(tx: mpsc::SyncSender<Message>, id: u32) -> Self {
         Self { tx, id }
     }
 

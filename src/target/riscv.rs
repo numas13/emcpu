@@ -1,3 +1,12 @@
+mod decode {
+    #![allow(dead_code)]
+
+    use crate::utils::{sextract, zextract};
+
+    include!(concat!(env!("OUT_DIR"), "/target/riscv/insn16.rs"));
+    include!(concat!(env!("OUT_DIR"), "/target/riscv/insn32.rs"));
+}
+
 use std::mem;
 use std::sync::mpsc;
 use std::thread;
@@ -6,31 +15,30 @@ use std::time::Duration;
 use crate::device::DeviceInterrupt;
 use crate::mem::{Error as MemoryError, Memory};
 use crate::target::Message;
-use crate::utils::{deposit, sextract, zextract};
+use crate::utils::{deposit, zextract};
 
-include!(concat!(env!("OUT_DIR"), "/target/riscv/insn16.rs"));
-include!(concat!(env!("OUT_DIR"), "/target/riscv/insn32.rs"));
+use self::decode::*;
 
 const EXCP_INSN_ADDR_MISALIGNED: u32 = 0;
 const EXCP_INSN_ACCESS_FAULT: u32 = 1;
 const EXCP_ILLEGAL_INSN: u32 = 2;
 const EXCP_BREAKPOINT: u32 = 3;
-const EXCP_LOAD_ADDR_MISALIGNED: u32 = 4;
+//const EXCP_LOAD_ADDR_MISALIGNED: u32 = 4;
 const EXCP_LOAD_ACCESS_FAULT: u32 = 5;
-const EXCP_STORE_AMO_ADDR_MISALIGNED: u32 = 6;
+//const EXCP_STORE_AMO_ADDR_MISALIGNED: u32 = 6;
 const EXCP_STORE_AMO_ACCESS_FAULT: u32 = 7;
-const EXCP_ECALL_UMODE: u32 = 8;
-const EXCP_ECALL_SMODE: u32 = 9;
-const EXCP_ECALL_MMODE: u32 = 11;
-const EXCP_INSN_PAGE_FAULT: u32 = 12;
-const EXCP_LOAD_PAGE_FAULT: u32 = 13;
-const EXCP_STORE_AMO_PAGE_FAULT: u32 = 15;
+//const EXCP_ECALL_UMODE: u32 = 8;
+//const EXCP_ECALL_SMODE: u32 = 9;
+//const EXCP_ECALL_MMODE: u32 = 11;
+//const EXCP_INSN_PAGE_FAULT: u32 = 12;
+//const EXCP_LOAD_PAGE_FAULT: u32 = 13;
+//const EXCP_STORE_AMO_PAGE_FAULT: u32 = 15;
 
 const fn make_interrupt(code: u32) -> u32 {
     (1 << 31) | code
 }
 
-const EXCP_MACHINE_EXTERNAL_INT: u32 = make_interrupt(11);
+//const EXCP_MACHINE_EXTERNAL_INT: u32 = make_interrupt(11);
 
 // Unprivileged Floating-Point CSRs
 //const CSR_FFLAGS: u32 = 0x001;
@@ -132,8 +140,8 @@ const fn misa_ext(c: u8) -> u32 {
 const MISA_EXT_M: u32 = misa_ext(b'm');
 const MISA_EXT_I: u32 = misa_ext(b'i');
 const MISA_EXT_X: u32 = misa_ext(b'x');
-const MISA_EXT_ALL: u32 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
-const MISA_EXT_MASK: u32 = MISA_EXT_ALL ^ MISA_EXT_I;
+const MISA_DEFAULT: u32 = MISA_EXT_M | MISA_EXT_I | MISA_EXT_X;
+const MISA_EXT_MASK: u32 = MISA_DEFAULT ^ MISA_EXT_I;
 
 const MSTATUS_MIE_OFFSET: u32 = 3;
 const MSTATUS_MIE: u64 = 1 << MSTATUS_MIE_OFFSET;
@@ -151,16 +159,19 @@ const MTVEC_MASK: u32 = 0xfffffffd;
 //const MIE_SE: u32 = 1 << 9;
 //const MIE_ME: u32 = 1 << 11;
 
-const SLEEP_TIME: Duration = Duration::from_micros(2000);
+const FREQUENCY: u64 = 1000;
+const SLEEP_TIME: Duration = Duration::from_nanos(1_000_000_000 / FREQUENCY);
 const PAUSE_TIME: Duration = Duration::from_secs(1);
 
 pub struct Cpu<M> {
-    pub pc: u32,
-    pub npc: u32,
-    pub gr: [u32; 32],
     pub mem: M,
+
     cpu_messages_tx: mpsc::SyncSender<Message>,
     cpu_messages_rx: mpsc::Receiver<Message>,
+
+    pc: u32,
+    npc: u32,
+    gr: [u32; 32],
 
     mstatus: u64,
     misa: u32,
@@ -189,7 +200,7 @@ impl<M> Cpu<M> {
             cpu_messages_tx,
 
             mstatus: 0,
-            misa: MISA_EXT_ALL,
+            misa: MISA_DEFAULT,
             mip: 0,
             mie: 0,
             mcause: 0,
@@ -230,7 +241,7 @@ impl<M> Cpu<M> {
         0
     }
 
-    pub fn write_gr(&mut self, i: usize, value: u32) {
+    fn write_gr(&mut self, i: usize, value: u32) {
         match i {
             0 => {}
             _ => self.gr[i] = value,
@@ -240,7 +251,7 @@ impl<M> Cpu<M> {
 
 impl<M: Memory> Cpu<M> {
     pub fn run(&mut self) {
-        info!("insn execution delay is {SLEEP_TIME:?}");
+        info!("CPU frequency is ~{} Hz", FREQUENCY);
 
         loop {
             while let Ok(msg) = self.cpu_messages_rx.try_recv() {

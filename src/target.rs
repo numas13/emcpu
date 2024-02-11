@@ -1,5 +1,6 @@
+#[cfg(feature = "target-riscv")]
 pub mod riscv;
 
-pub enum Message {
+pub(crate) enum Message {
     DeviceInterrupt(u32),
 }

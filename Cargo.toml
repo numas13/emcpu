@@ -6,9 +6,15 @@ authors = ["Denis Drakhnia <numas13@gmail.com>"]
 edition = "2021"
 rust-version = "1.68"
 
+[features]
+default = ["target-riscv"]
+target-riscv = ["decodetree"]
+
 [dependencies]
 log = "0.4"
+
+[dev-dependencies]
 env_logger = "0.10"
 
 [build-dependencies]
-decodetree = { git = "https://github.com/numas13/decodetree.git" }
+decodetree = { optional = true, git = "https://github.com/numas13/decodetree.git" }

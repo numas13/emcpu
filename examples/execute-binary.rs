@@ -1,17 +1,14 @@
 #[macro_use]
 extern crate log;
 
-mod device;
-mod mem;
-mod target;
-mod utils;
-
-use std::{env, fs};
-
-use crate::mem::{Memory, SimpleMem};
-use crate::target::riscv::Cpu;
-
+#[cfg(feature = "target-riscv")]
 fn main() {
+    use std::{env, fs};
+
+    use emcpu::device;
+    use emcpu::mem::{Memory, SimpleMem};
+    use emcpu::target::riscv::Cpu;
+
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .parse_default_env()
@@ -31,4 +28,9 @@ fn main() {
     info!("terminal MMIO base is {base:#x}");
 
     cpu.run();
+}
+
+#[cfg(not(feature = "target-riscv"))]
+fn main() {
+    eprintln!("`target-riscv` feature must be enabled");
 }

@@ -110,8 +110,8 @@ pub struct SimpleMem {
 }
 
 impl SimpleMem {
-    pub const PAGE_SIZE: usize = 4096;
-    pub const MMIO_BASE: usize = 0x80000000;
+    const PAGE_SIZE: usize = 4096;
+    const MMIO_BASE: usize = 0x80000000;
 
     pub fn new(size: usize) -> Self {
         Self {
@@ -120,7 +120,7 @@ impl SimpleMem {
         }
     }
 
-    pub fn is_mmio_range(&self, address: usize) -> bool {
+    fn is_mmio_range(&self, address: usize) -> bool {
         (Self::MMIO_BASE..Self::MMIO_BASE + self.devices.len() * Self::PAGE_SIZE).contains(&address)
     }
 }
