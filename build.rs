@@ -13,7 +13,7 @@ where
 
     println!("cargo:rerun-if-changed={path}");
     let src = fs::read_to_string(path).unwrap();
-    let tree = match decodetree::parse::<T>(&src) {
+    let tree = match decodetree::from_str::<T, decodetree::Str>(&src) {
         Ok(tree) => tree,
         Err(errors) => {
             for err in errors.iter(path) {
@@ -27,11 +27,12 @@ where
     }
     let mut out = BufWriter::new(File::create(out).unwrap());
 
-    Generator::<T>::builder()
+    Generator::builder()
         .trait_name(trait_name)
         .stubs(true)
-        .build(&tree)
-        .gen(&mut out)
+        .value_type("i32")
+        .build(&tree, ())
+        .generate(&mut out)
         .unwrap();
 }
 

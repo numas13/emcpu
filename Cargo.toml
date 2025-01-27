@@ -17,4 +17,4 @@ log = "0.4"
 env_logger = "0.10"
 
 [build-dependencies]
-decodetree = { optional = true, git = "https://github.com/numas13/decodetree.git" }
+decodetree = { version = "0.4.7", optional = true, features = ["gen"] }

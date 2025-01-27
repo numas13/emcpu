@@ -273,7 +273,7 @@ impl<M: Memory> Cpu<M> {
     }
 
     fn decode32(&mut self, insn: u32) {
-        if !RiscvDecode32::decode(self, insn) {
+        if RiscvDecode32::decode(self, insn).is_err() {
             trace!("{:x}: illegal instruction {insn:x}", self.pc);
             self.minst = insn;
             self.excp(EXCP_ILLEGAL_INSN, 0);
@@ -281,7 +281,7 @@ impl<M: Memory> Cpu<M> {
     }
 
     fn decode16(&mut self, insn: u16) {
-        if !RiscvDecode16::decode(self, insn) {
+        if RiscvDecode16::decode(self, insn).is_err() {
             trace!("{:x}: illegal instruction {insn:x}", self.pc);
             self.minst = insn as u32;
             self.excp(EXCP_ILLEGAL_INSN, 0);
@@ -339,29 +339,28 @@ impl<M: Memory> Cpu<M> {
         self.check_ext(ext) && op(self, name, args)
     }
 
-    fn exec_b<O>(&mut self, name: &str, b: &args_b, ext: u64, op: O) -> bool
+    fn exec_b<O>(&mut self, name: &str, b: args_b, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u64, u64) -> bool,
     {
         self.exec(name, b, ext, |cpu, name, b| {
             let s1 = cpu.gr[b.rs1 as usize];
             let s2 = cpu.gr[b.rs2 as usize];
-            let imm = b.imm as i32;
             trace!(
                 "{:x}: {name}\tx{}={s1}, x{}={s2}, {}",
                 cpu.pc,
                 b.rs1,
                 b.rs2,
-                imm
+                b.imm
             );
             if op(cpu, s1, s2) {
-                cpu.npc = cpu.pc.wrapping_add(imm as u64);
+                cpu.npc = cpu.pc.wrapping_add(b.imm as u64);
             }
             true
         })
     }
 
-    fn exec_i<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
+    fn exec_i<O>(&mut self, name: &str, i: args_i, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u64, u64) -> u64,
     {
@@ -380,7 +379,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_i32<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
+    fn exec_i32<O>(&mut self, name: &str, i: args_i, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u32, u32) -> u32,
     {
@@ -389,7 +388,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_u<O>(&mut self, name: &str, u: &args_u, ext: u64, op: O) -> bool
+    fn exec_u<O>(&mut self, name: &str, u: args_u, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u64) -> u64,
     {
@@ -401,7 +400,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_shift<O>(&mut self, name: &str, i: &args_shift, ext: u64, op: O) -> bool
+    fn exec_shift<O>(&mut self, name: &str, i: args_shift, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u64, u64) -> u64,
     {
@@ -420,7 +419,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_shift32<O>(&mut self, name: &str, i: &args_shift, ext: u64, op: O) -> bool
+    fn exec_shift32<O>(&mut self, name: &str, i: args_shift, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u32, u32) -> u32,
     {
@@ -429,7 +428,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_r<O>(&mut self, name: &str, r: &args_r, ext: u64, op: O) -> bool
+    fn exec_r<O>(&mut self, name: &str, r: args_r, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u64, u64) -> u64,
     {
@@ -449,7 +448,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_r32<O>(&mut self, name: &str, r: &args_r, ext: u64, op: O) -> bool
+    fn exec_r32<O>(&mut self, name: &str, r: args_r, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, u32, u32) -> u32,
     {
@@ -458,7 +457,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_l<O>(&mut self, name: &str, i: &args_i, ext: u64, op: O) -> bool
+    fn exec_l<O>(&mut self, name: &str, i: args_i, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, usize) -> Result<u64, MemoryError>,
     {
@@ -484,7 +483,7 @@ impl<M: Memory> Cpu<M> {
         })
     }
 
-    fn exec_s<O>(&mut self, name: &str, s: &args_s, ext: u64, op: O) -> bool
+    fn exec_s<O>(&mut self, name: &str, s: args_s, ext: u64, op: O) -> bool
     where
         O: Fn(&mut Self, usize, u64) -> Result<(), MemoryError>,
     {
@@ -589,7 +588,7 @@ impl<M: Memory> Cpu<M> {
         true
     }
 
-    fn exec_csr<O>(&mut self, csr: isize, rr: bool, wr: bool, value: u64, rd: isize, op: O) -> bool
+    fn exec_csr<O>(&mut self, csr: i32, rr: bool, wr: bool, value: u64, rd: i32, op: O) -> bool
     where
         O: Fn(u64, u64) -> u64,
     {
@@ -628,7 +627,7 @@ impl<M: Memory> Cpu<M> {
         };
     }
 
-    fn jal(&mut self, name: &str, j: &args_j) -> bool {
+    fn jal(&mut self, name: &str, j: args_j) -> bool {
         let npc = self.pc.wrapping_add(j.imm as u64);
         trace!("{:x}: {name}\tx{}, {} # {npc:x}", self.pc, j.rd, j.imm);
         self.write_gr(j.rd as usize, self.npc);
@@ -636,7 +635,7 @@ impl<M: Memory> Cpu<M> {
         true
     }
 
-    fn jalr(&mut self, name: &str, i: &args_i) -> bool {
+    fn jalr(&mut self, name: &str, i: args_i) -> bool {
         let s1 = self.gr[i.rs1 as usize];
         let npc = s1.wrapping_add(i.imm as u64);
         trace!(
@@ -654,54 +653,58 @@ impl<M: Memory> Cpu<M> {
 
 macro_rules! trans {
     ($($func:ident = $exec:ident($($arg:ident : $ty:ty),* ; $($param:expr),* $(,)?)),+ $(,)?) => (
-        $(fn $func(&mut self, $($arg: $ty),*) -> bool {
-            self.$exec(stringify!($func), ($($arg),*), $($param,)*)
+        $(fn $func(&mut self, $($arg: $ty),*) -> Result<bool, ()> {
+            Ok(self.$exec(stringify!($func), ($($arg),*), $($param,)*))
         })+
     );
 }
 
 macro_rules! forward_c {
     ($($func:ident($($arg:ident : $ty:ty),* $(,)?)),+ $(,)?) => (
-        $(fn $func(&mut self, $($arg: $ty),*) -> bool {
-            self.check_ext(MISA_EXT_C) && <Self as RiscvDecode32>::$func(self, $($arg),*)
+        $(fn $func(&mut self, $($arg: $ty),*) -> Result<bool, ()> {
+            Ok(self.check_ext(MISA_EXT_C) && <Self as RiscvDecode32>::$func(self, $($arg),*)?)
         })+
     );
 }
 
 impl<M: Memory> RiscvDecode16 for Cpu<M> {
-    fn ex_shift_1(&mut self, value: isize) -> isize {
+    type Error = ();
+
+    fn fail(&self) -> Self::Error {}
+
+    fn ex_shift_1(&self, value: i32) -> i32 {
         value << 1
     }
 
-    fn ex_shift_2(&mut self, value: isize) -> isize {
+    fn ex_shift_2(&self, value: i32) -> i32 {
         value << 2
     }
 
-    fn ex_shift_3(&mut self, value: isize) -> isize {
+    fn ex_shift_3(&self, value: i32) -> i32 {
         value << 3
     }
 
-    fn ex_shift_4(&mut self, value: isize) -> isize {
+    fn ex_shift_4(&self, value: i32) -> i32 {
         value << 4
     }
 
-    fn ex_shift_12(&mut self, value: isize) -> isize {
+    fn ex_shift_12(&self, value: i32) -> i32 {
         value << 12
     }
 
-    fn ex_rvc_shiftli(&mut self, value: isize) -> isize {
+    fn ex_rvc_shiftli(&self, value: i32) -> i32 {
         value
     }
 
-    fn ex_rvc_shiftri(&mut self, value: isize) -> isize {
+    fn ex_rvc_shiftri(&self, value: i32) -> i32 {
         value
     }
 
-    fn ex_rvc_register(&mut self, value: isize) -> isize {
+    fn ex_rvc_register(&self, value: i32) -> i32 {
         value + 8
     }
 
-    fn ex_sreg_register(&mut self, _value: isize) -> isize {
+    fn ex_sreg_register(&self, _value: i32) -> i32 {
         todo!("ex_sreg_register")
     }
 
@@ -710,136 +713,144 @@ impl<M: Memory> RiscvDecode16 for Cpu<M> {
     trans! {
         trans_illegal   = exec(; 0, |cpu, _, _| {
             trace!("{:x}: c.illegal", cpu.pc);
-            false
+            cpu.minst = 0; // TODO:
+            cpu.excp(EXCP_ILLEGAL_INSN, 0);
+            true
         }),
 
         trans_c64_illegal   = exec(; 0, |cpu, _, _| {
             trace!("{:x}: c64.illegal", cpu.pc);
-            false
+            cpu.minst = 0; // TODO:
+            cpu.excp(EXCP_ILLEGAL_INSN, 0);
+            true
         }),
     }
 
     // RVC Standard Extension
     #[rustfmt::skip]
     forward_c! {
-        trans_lui(u: &args_u),
+        trans_lui(u: args_u),
 
-        trans_jal(j: &args_j),
-        trans_jalr(j: &args_i),
+        trans_jal(j: args_j),
+        trans_jalr(j: args_i),
 
-        trans_beq(b: &args_b),
-        trans_bne(b: &args_b),
+        trans_beq(b: args_b),
+        trans_bne(b: args_b),
 
-        trans_lw(i: &args_i),
-        trans_ld(i: &args_i),
+        trans_lw(i: args_i),
+        trans_ld(i: args_i),
 
-        trans_sw(s: &args_s),
-        trans_sd(s: &args_s),
+        trans_sw(s: args_s),
+        trans_sd(s: args_s),
 
-        trans_andi(i: &args_i),
+        trans_andi(i: args_i),
 
-        trans_slli(i: &args_shift),
-        trans_srli(i: &args_shift),
-        trans_srai(i: &args_shift),
+        trans_slli(i: args_shift),
+        trans_srli(i: args_shift),
+        trans_srai(i: args_shift),
 
-        trans_addi(i: &args_i),
+        trans_addi(i: args_i),
 
-        trans_and(r: &args_r),
-        trans_or(r: &args_r),
-        trans_xor(r: &args_r),
-        trans_add(r: &args_r),
-        trans_sub(r: &args_r),
+        trans_and(r: args_r),
+        trans_or(r: args_r),
+        trans_xor(r: args_r),
+        trans_add(r: args_r),
+        trans_sub(r: args_r),
 
-        trans_addiw(i: &args_i),
+        trans_addiw(i: args_i),
 
-        trans_addw(r: &args_r),
-        trans_subw(r: &args_r),
+        trans_addw(r: args_r),
+        trans_subw(r: args_r),
 
         trans_ebreak(),
     }
 }
 
 impl<M: Memory> RiscvDecode32 for Cpu<M> {
-    fn ex_plus_1(&mut self, value: isize) -> isize {
+    type Error = ();
+
+    fn fail(&self) -> Self::Error {}
+
+    fn ex_plus_1(&self, value: i32) -> i32 {
         value + 1
     }
 
-    fn ex_shift_12(&mut self, value: isize) -> isize {
+    fn ex_shift_12(&self, value: i32) -> i32 {
         value << 12
     }
 
-    fn ex_shift_3(&mut self, value: isize) -> isize {
+    fn ex_shift_3(&self, value: i32) -> i32 {
         value << 3
     }
 
-    fn ex_shift_1(&mut self, value: isize) -> isize {
+    fn ex_shift_1(&self, value: i32) -> i32 {
         value << 1
     }
 
     // RV64I Base Instruction Set
     #[rustfmt::skip]
     trans! {
-        trans_lui       = exec_u(u: &args_u; 0, |_, i| i),
-        trans_auipc     = exec_u(u: &args_u; 0, |cpu, i| cpu.pc.wrapping_add(i)),
+        trans_lui       = exec_u(u: args_u; 0, |_, i| i),
+        trans_auipc     = exec_u(u: args_u; 0, |cpu, i| cpu.pc.wrapping_add(i)),
 
-        trans_jal       = exec(j: &args_j; 0, Self::jal),
-        trans_jalr      = exec(i: &args_i; 0, Self::jalr),
+        trans_jal       = exec(j: args_j; 0, Self::jal),
+        trans_jalr      = exec(i: args_i; 0, Self::jalr),
 
-        trans_beq       = exec_b(b: &args_b; 0, |_, a, b| a == b),
-        trans_bne       = exec_b(b: &args_b; 0, |_, a, b| a != b),
-        trans_blt       = exec_b(b: &args_b; 0, |_, a, b| (a as i64) < (b as i64)),
-        trans_bge       = exec_b(b: &args_b; 0, |_, a, b| (a as i64) >= (b as i64)),
-        trans_bltu      = exec_b(b: &args_b; 0, |_, a, b| a < b),
-        trans_bgeu      = exec_b(b: &args_b; 0, |_, a, b| a >= b),
+        trans_beq       = exec_b(b: args_b; 0, |_, a, b| a == b),
+        trans_bne       = exec_b(b: args_b; 0, |_, a, b| a != b),
+        trans_blt       = exec_b(b: args_b; 0, |_, a, b| (a as i64) < (b as i64)),
+        trans_bge       = exec_b(b: args_b; 0, |_, a, b| (a as i64) >= (b as i64)),
+        trans_bltu      = exec_b(b: args_b; 0, |_, a, b| a < b),
+        trans_bgeu      = exec_b(b: args_b; 0, |_, a, b| a >= b),
 
-        trans_andi      = exec_i(i: &args_i; 0, |_, a, b| a & b),
-        trans_ori       = exec_i(i: &args_i; 0, |_, a, b| a | b),
-        trans_xori      = exec_i(i: &args_i; 0, |_, a, b| a ^ b),
-        trans_addi      = exec_i(i: &args_i; 0, |_, a, b| a.wrapping_add(b)),
-        trans_slti      = exec_i(i: &args_i; 0, |_, a, b| slt(a, b)),
-        trans_sltiu     = exec_i(i: &args_i; 0, |_, a, b| sltu(a, b)),
+        trans_andi      = exec_i(i: args_i; 0, |_, a, b| a & b),
+        trans_ori       = exec_i(i: args_i; 0, |_, a, b| a | b),
+        trans_xori      = exec_i(i: args_i; 0, |_, a, b| a ^ b),
+        trans_addi      = exec_i(i: args_i; 0, |_, a, b| a.wrapping_add(b)),
+        trans_slti      = exec_i(i: args_i; 0, |_, a, b| slt(a, b)),
+        trans_sltiu     = exec_i(i: args_i; 0, |_, a, b| sltu(a, b)),
 
-        trans_slli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b as u32)),
-        trans_srli      = exec_shift(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b as u32)),
-        trans_srai      = exec_shift(i: &args_shift; 0, |_, a, b| sra(a, b)),
+        trans_slli      = exec_shift(i: args_shift; 0, |_, a, b| a.wrapping_shl(b as u32)),
+        trans_srli      = exec_shift(i: args_shift; 0, |_, a, b| a.wrapping_shr(b as u32)),
+        trans_srai      = exec_shift(i: args_shift; 0, |_, a, b| sra(a, b)),
 
-        trans_and       = exec_r(r: &args_r; 0, |_, a, b| a & b),
-        trans_or        = exec_r(r: &args_r; 0, |_, a, b| a | b),
-        trans_xor       = exec_r(r: &args_r; 0, |_, a, b| a ^ b),
-        trans_add       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_add(b)),
-        trans_sub       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
-        trans_slt       = exec_r(r: &args_r; 0, |_, a, b| slt(a, b)),
-        trans_sltu      = exec_r(r: &args_r; 0, |_, a, b| sltu(a, b)),
-        trans_sll       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shl(b as u32)),
-        trans_srl       = exec_r(r: &args_r; 0, |_, a, b| a.wrapping_shr(b as u32)),
-        trans_sra       = exec_r(r: &args_r; 0, |_, a, b| sra(a, b)),
+        trans_and       = exec_r(r: args_r; 0, |_, a, b| a & b),
+        trans_or        = exec_r(r: args_r; 0, |_, a, b| a | b),
+        trans_xor       = exec_r(r: args_r; 0, |_, a, b| a ^ b),
+        trans_add       = exec_r(r: args_r; 0, |_, a, b| a.wrapping_add(b)),
+        trans_sub       = exec_r(r: args_r; 0, |_, a, b| a.wrapping_sub(b)),
+        trans_slt       = exec_r(r: args_r; 0, |_, a, b| slt(a, b)),
+        trans_sltu      = exec_r(r: args_r; 0, |_, a, b| sltu(a, b)),
+        trans_sll       = exec_r(r: args_r; 0, |_, a, b| a.wrapping_shl(b as u32)),
+        trans_srl       = exec_r(r: args_r; 0, |_, a, b| a.wrapping_shr(b as u32)),
+        trans_sra       = exec_r(r: args_r; 0, |_, a, b| sra(a, b)),
 
-        trans_addiw     = exec_i32(i: &args_i; 0, |_, a, b| a.wrapping_add(b)),
+        trans_addiw     = exec_i32(i: args_i; 0, |_, a, b| a.wrapping_add(b)),
 
-        trans_slliw     = exec_shift32(i: &args_shift; 0, |_, a, b| a.wrapping_shl(b)),
-        trans_srliw     = exec_shift32(i: &args_shift; 0, |_, a, b| a.wrapping_shr(b)),
-        trans_sraiw     = exec_shift32(i: &args_shift; 0, |_, a, b| sraw(a, b)),
+        trans_slliw     = exec_shift32(i: args_shift; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srliw     = exec_shift32(i: args_shift; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sraiw     = exec_shift32(i: args_shift; 0, |_, a, b| sraw(a, b)),
 
-        trans_addw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_add(b)),
-        trans_subw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_sub(b)),
-        trans_sllw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_shl(b)),
-        trans_srlw      = exec_r32(r: &args_r; 0, |_, a, b| a.wrapping_shr(b)),
-        trans_sraw      = exec_r32(r: &args_r; 0, |_, a, b| sraw(a, b)),
+        trans_addw      = exec_r32(r: args_r; 0, |_, a, b| a.wrapping_add(b)),
+        trans_subw      = exec_r32(r: args_r; 0, |_, a, b| a.wrapping_sub(b)),
+        trans_sllw      = exec_r32(r: args_r; 0, |_, a, b| a.wrapping_shl(b)),
+        trans_srlw      = exec_r32(r: args_r; 0, |_, a, b| a.wrapping_shr(b)),
+        trans_sraw      = exec_r32(r: args_r; 0, |_, a, b| sraw(a, b)),
 
-        trans_lb        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u64)),
-        trans_lh        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u64)),
-        trans_lw        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i32_le(a).map(|i| i as i32 as u64)),
-        trans_ld        = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_i64_le(a)),
-        trans_lbu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u64)),
-        trans_lhu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u64)),
-        trans_lwu       = exec_l(i: &args_i; 0, |cpu, a| cpu.mem.read_u32_le(a).map(|i| i as u64)),
+        trans_lb        = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_i8(a).map(|i| i as i32 as u64)),
+        trans_lh        = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_i16_le(a).map(|i| i as i32 as u64)),
+        trans_lw        = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_i32_le(a).map(|i| i as i32 as u64)),
+        trans_ld        = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_i64_le(a)),
+        trans_lbu       = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_u8(a).map(|i| i as u64)),
+        trans_lhu       = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_u16_le(a).map(|i| i as u64)),
+        trans_lwu       = exec_l(i: args_i; 0, |cpu, a| cpu.mem.read_u32_le(a).map(|i| i as u64)),
 
-        trans_sb        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u8(a, v as u8)),
-        trans_sh        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u16_le(a, v as u16)),
-        trans_sw        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u32_le(a, v as u32)),
-        trans_sd        = exec_s(s: &args_s; 0, |cpu, a, v| cpu.mem.write_u64_le(a, v)),
+        trans_sb        = exec_s(s: args_s; 0, |cpu, a, v| cpu.mem.write_u8(a, v as u8)),
+        trans_sh        = exec_s(s: args_s; 0, |cpu, a, v| cpu.mem.write_u16_le(a, v as u16)),
+        trans_sw        = exec_s(s: args_s; 0, |cpu, a, v| cpu.mem.write_u32_le(a, v as u32)),
+        trans_sd        = exec_s(s: args_s; 0, |cpu, a, v| cpu.mem.write_u64_le(a, v)),
 
-        trans_fence     = exec(pred: isize, succ: isize; 0, |cpu, name, _| {
+        trans_fence     = exec(pred: i32, succ: i32; 0, |cpu, name, _| {
             trace!("{:x}: {name}", cpu.pc);
             // TODO: fence
             false
@@ -873,30 +884,30 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
     // RV64 Zicsr Standard Extension
     #[rustfmt::skip]
     trans! {
-        trans_csrrw     = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrw     = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             let s1 = cpu.gr[rs1 as usize];
             trace!("{:x}: {name}\tx{rd}, {csr:x}, x{rs1}={s1}", cpu.pc);
             cpu.exec_csr(csr, rd != 0, true, s1, rd, |_, b| b)
         }),
-        trans_csrrs     = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrs     = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             let s1 = cpu.gr[rs1 as usize];
             trace!("{:x}: {name}\tx{rd}, {csr:x}, x{rs1}={s1}", cpu.pc);
             cpu.exec_csr(csr, true, rs1 != 0, s1, rd, |a, b| a | b)
         }),
-        trans_csrrc     = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrc     = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             let s1 = cpu.gr[rs1 as usize];
             trace!("{:x}: {name}\tx{rd}, {csr:x}, x{rs1}={s1}", cpu.pc);
             cpu.exec_csr(csr, true, rs1 != 0, s1, rd, |a, b| a & !b)
         }),
-        trans_csrrwi    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrwi    = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
             cpu.exec_csr(csr, rd != 0, true, rs1 as u64, rd, |_, b| b)
         }),
-        trans_csrrsi    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrsi    = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
             cpu.exec_csr(csr, true, rs1 != 0, rs1 as u64, rd, |a, b| a | b)
         }),
-        trans_csrrci    = exec(csr: isize, rs1: isize, rd: isize; 0, |cpu, name, (csr, rs1, rd)| {
+        trans_csrrci    = exec(csr: i32, rs1: i32, rd: i32; 0, |cpu, name, (csr, rs1, rd)| {
             trace!("{:x}: {name}\tx{rd}, {csr:x}, {rs1}", cpu.pc);
             cpu.exec_csr(csr, true, rs1 != 0, rs1 as u64, rd, |a, b| a & !b)
         }),
@@ -905,20 +916,20 @@ impl<M: Memory> RiscvDecode32 for Cpu<M> {
     // RV64M Standard Extension
     #[rustfmt::skip]
     trans! {
-        trans_mul       = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| mul(a, b)),
-        trans_mulh      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| mulh(a, b)),
-        trans_mulhu     = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| mulhu(a, b)),
-        trans_mulhsu    = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| mulhsu(a, b)),
-        trans_div       = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| div(a, b)),
-        trans_divu      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| divu(a, b)),
-        trans_rem       = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| rem(a, b)),
-        trans_remu      = exec_r(r: &args_r; MISA_EXT_M, |_, a, b| remu(a, b)),
+        trans_mul       = exec_r(r: args_r; MISA_EXT_M, |_, a, b| mul(a, b)),
+        trans_mulh      = exec_r(r: args_r; MISA_EXT_M, |_, a, b| mulh(a, b)),
+        trans_mulhu     = exec_r(r: args_r; MISA_EXT_M, |_, a, b| mulhu(a, b)),
+        trans_mulhsu    = exec_r(r: args_r; MISA_EXT_M, |_, a, b| mulhsu(a, b)),
+        trans_div       = exec_r(r: args_r; MISA_EXT_M, |_, a, b| div(a, b)),
+        trans_divu      = exec_r(r: args_r; MISA_EXT_M, |_, a, b| divu(a, b)),
+        trans_rem       = exec_r(r: args_r; MISA_EXT_M, |_, a, b| rem(a, b)),
+        trans_remu      = exec_r(r: args_r; MISA_EXT_M, |_, a, b| remu(a, b)),
 
-        trans_mulw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| mulw(a, b)),
-        trans_divw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| divw(a, b)),
-        trans_divuw     = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| divuw(a, b)),
-        trans_remw      = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| remw(a, b)),
-        trans_remuw     = exec_r32(r: &args_r; MISA_EXT_M, |_, a, b| remuw(a, b)),
+        trans_mulw      = exec_r32(r: args_r; MISA_EXT_M, |_, a, b| mulw(a, b)),
+        trans_divw      = exec_r32(r: args_r; MISA_EXT_M, |_, a, b| divw(a, b)),
+        trans_divuw     = exec_r32(r: args_r; MISA_EXT_M, |_, a, b| divuw(a, b)),
+        trans_remw      = exec_r32(r: args_r; MISA_EXT_M, |_, a, b| remw(a, b)),
+        trans_remuw     = exec_r32(r: args_r; MISA_EXT_M, |_, a, b| remuw(a, b)),
     }
 
     // Privileged Instructions
